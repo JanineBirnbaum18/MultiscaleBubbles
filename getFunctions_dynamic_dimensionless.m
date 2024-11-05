@@ -377,6 +377,7 @@ etar = eta_interp.*(etainf + (eta0-etainf)./(1+(6/5*Cc).^2));
 etar(etar>1e12/Mu) = 1e12/Mu;
 
 detadz = -(1./h2).*[etar(1) etar(2:2:end-2) etar(end-2)] + (1./h2).*[etar(2) etar(4:2:end) etar(end-1)];
+%detadz = -(1./h2).*[etar(1) etar(2:2:end-2) etar(end-2)] + (1./h2).*[etar(2) etar(4:2:end) etar(end-1)];
 
 etar = etar(1:2:end);
 

@@ -50,38 +50,35 @@ T_t0 = PT_t0(:,2);
 %scale to appropriate length, and shift so that xB
 %starts at the bubble wall
 %(equation A.6 from manuscript)
-xB=[0 logspace(-2,0,Nodes)*L]' + R_0;
-
+x1 = logspace(-2,0,ceil(Nodes/2))*L/2;
+x2 = -logspace(0,-2,floor(Nodes/2)+1)*L/2+L;
+xB=[0 x1 x2(2:end)]' + R_0;
 
 %block-centered grid - use midpoints of xB
 %(equation A.3 from manuscript)
-x=(xB(2:end,1)+xB(1:end-1,1))/2;
+x=(xB(2:end,1)+xB(1:end-1,1))/2; 
 
 %uniform concentration; system in equilibrium Although this can be
 %changed to represent non-uniform conditions. Any initial concentration
 %profile can be set by the user.
 if length(H2Ot_0) == 1
     H2Ot = zeros(Nodes,1)+H2Ot_0;
+    m_0 = m0_fun(R_0, P_t0 +(2*SurfTens/R_0), T_t0);
 else
     H2Ot = H2Ot_0(:,2);
     H2Ot_0 = H2Ot_0(:,2);
-end
-
-%Compute the initial mass of gas in the bubble
-if length(H2Ot_0) == 1
-    m_0 = m0_fun(R_0, P_t0 +(2*SurfTens/R_0), T_t0);
-else
     m_0 = m_loss;
 end
 
 %Y_0 is a vector containing quantities to be solved for by ode15s
-Y_0 = [H2Ot;R_0];
+Y_0 = [H2Ot;0;R_0];
 
 %Declare the listener function
 xoverFcn=@(t,X)eventDetection(t,X);
 
 %Set the options for the ODE solver
-options = odeset('AbsTol',Numerical_Tolerance(1),'RelTol',Numerical_Tolerance(2),'Events',xoverFcn);
+options = odeset('AbsTol',Numerical_Tolerance(1),'RelTol',...
+    Numerical_Tolerance(2),'Events',xoverFcn);
 
 %Create an anonymous function of the ODE to solve for passing to the
 %solver
@@ -111,8 +108,9 @@ function [dYdt, pb] =  MYodeFun(t,Y,x,xB,m_0,melt_Rho,T_0,P_0,H2Ot_0,R_0,W,SurfT
     T_f, dTdt, P_f, dPdt,t_quench, eta, z_p, j, Geometry,radius)
 
 %extract individual concentrations
-nx = (size(Y,1) - 1);
+nx = (size(Y,1) - 2);
 H2Ot = Y(1:nx,:);
+m_lost = Y(end-1);
 R = Y(end,:);
 
 %Get current temperature and pressure
@@ -120,18 +118,15 @@ PT = PTt_fun(P_0, P_f, dPdt,T_0,T_f,dTdt,t_quench,t);
 P = PT(:,1);
 T = PT(:,2);
 
-%Trapz is a function that uses the trapezoidal rule to numerically
-%integrate. Dim is the dimension to operate on
-dim = 1;
-
 %Get mass of gas (Equation 7 from the main manuscript)
-I1=trapz(x.^3,(1/100)*H2Ot_0,dim);
-I2=trapz(x.^3,(1/100)*H2Ot,dim);                                                                                                                                                                                                                           
-m=m_0+4.*pi.*melt_Rho.*(I1-I2);
+I1=4.*pi.*melt_Rho.*(1/100)*trapz(x,H2Ot_0.*x.^2,1);
+I2=4.*pi.*melt_Rho.*(1/100)*trapz(x,H2Ot.*x.^2,1); 
+
+m=max([0,m_0+(I1-I2)+m_lost]);
 
 %Compute pressure of the gas  in the bubble from EOS
 %(section 2.3.2 of main manuscript)
-pb = max([1e5,pb_fun(m, T, R)]);
+pb = max(0,pb_fun(m, T, R));
 
 %====boundary conditions====
 %Determine the solubility condition of water in the system based on gas
@@ -173,17 +168,14 @@ dDH2Otdx  = [-A(1)*DH2Ot(1) + B(1)*DH2Ot(2) - C(1)*DH2Ot(3); ...
         D(end).*DH2Ot(end-2) - B(end).*DH2Ot(end-1) + F(end).*DH2Ot(end)];
 
 dJH2Odx = DH2Ot.*d2H2Otdx2 + dDH2Otdx.*dH2Otdx + 2./z.*DH2Ot.*dH2Otdx;
-
-%JH2Ot = -DH2Ot.*diff([H2Oeq;H2Ot],1,1)./diff([xB(1,:);x],1,1);
-%Gradient of the diffusion flux.
-%dJH2Odx = (1./(x.^2)).*diff([(((x.^3+R.^3-R_0.^3).^(4/3))./(x.^2)).*JH2Ot;0],1,1)./diff(xB,1,1);
+FH2Ot = 1./100*DiffFun(mean(H2Ot(end-1:end)),T,P,W).*dH2Otdx(end);
 
 %====solve hydrodynamic equation====
 %Compute the viscosity
 v = ViscFun(H2Ot,T,Composition);
 
 %Compute integrated viscosity (equation A.5 from manuscript)
-I3=trapz(x, (v.*x.^2)./((R.^3-R_0.^3+x.^3).^2),dim);
+I3=trapz(x, (v.*x.^2)./((R.^3-R_0.^3+x.^3).^2),1);
 %switch Geometry
 %     case 'Radial'
      %I3_susp = trapz(z_p, (eta.*z_p.^2)./((z_p.^3).^2))./(4/3.*pi*(z_p(2).^3-z_p(1).^3).*Nb);
@@ -217,16 +209,14 @@ I3=trapz(x, (v.*x.^2)./((R.^3-R_0.^3+x.^3).^2),dim);
 dRdt= ((pb-P-(2.*(SurfTens)./R))./(12.*R.^2))./I3;
 
 %return rhs of ode
-dYdt = real([dJH2Odx(2:end);dRdt]);
+dYdt = real([dJH2Odx(2:end);4*pi*melt_Rho*x(end)^2*FH2Ot;dRdt]);
+
 switch OutgasModel
     case 'Diffusive'
-        dYdt(end-1) = 0;
+        if (abs(dJH2Odx(end))>1e-20)
+            dYdt(end-2) = 0;
+        end
 end
-
-%figure(5); hold on;
-%plot(x,H2Ot)
-%drawnow
-
 
 %==========================================================================
 %Functions to get outputs from the ODE solution
@@ -238,7 +228,8 @@ Y = Y';
 %Get the bubble radius and phi
 R = Y(end,:);
 %Get all of the water profiles
-H2Ot_all = Y(1:end-1,:);
+H2Ot_all = Y(1:end-2,:);
+m_lost = Y(end-1,:);
 %phi = Porosity (Nb,R);
 [phi,Nb] = Porosity_conc (Nb_0,R_0,R);
 
@@ -247,7 +238,7 @@ x_out = (x.^3+R.^3-R_0^3).^(1/3);
 
 I1=trapz(x_out(:,1),(1/100)*H2Ot_all(:,1).*x_out(:,1).^2);
 I2=trapz(x_out(:,end),(1/100)*H2Ot_all(:,end).*x_out(:,end).^2);
-m=m_0+4.*pi.*melt_Rho.*(I1-I2);
+m=m_0+4.*pi.*melt_Rho.*(I1-I2)+m_lost(end);
 
 %Get P-T-t history
 PT = PTt_fun(P_0, P_f, dPdt,T_0,T_f,dTdt,t_quench,t);

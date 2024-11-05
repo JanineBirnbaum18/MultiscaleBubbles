@@ -104,7 +104,7 @@ pp = 2.3e3;
 erri = 5e-4;
 tol = erri;
 mm = 0;
-w = 0.6;
+w = 0.4;
 
 % Plot options
 cmap = hot(2*length(t));
@@ -357,6 +357,7 @@ while t(max([1,i-1]))<tf && i<=nt
     
             else
                 T(i,:) = PT(nt+i);
+                BC_Ti = T(i,end);
             end
 
             % Diffusive gas loss
@@ -367,7 +368,7 @@ while t(max([1,i-1]))<tf && i<=nt
                     P_interp = griddedInterpolant(zz_p(i-1,:),P(i-1,:),'linear','nearest');
                     P_interp = P_interp(zz_t(i-1,:));
                     D = DiffFun(mean_H2O(i-1,:),T(i,:), P_interp, W);
-                    mean_H2O_diff = OutgasFun(mean_H2O(i-1,:),mean_H2O(i-1,:),D,zz_t(i-1,:),dt,dt,SolFun(BC_T(end),pp),'BDF1');
+                    mean_H2O_diff = OutgasFun(mean_H2O(i-1,:),mean_H2O(i-1,:),D,zz_t(i-1,:),dt,dt,SolFun(BC_Ti,pp),'BDF1');
                     mean_H2O(i,1:2:end) = mean_H2O_diff(1:2:end);
                     H2O(i,:,end) = mean_H2O_diff(2:2:end);                    
             end
@@ -438,9 +439,9 @@ while t(max([1,i-1]))<tf && i<=nt
                 end
             end
 
-            H2O_diff = griddedInterpolant(zz_p(i-1,:),mean_H2O(i,2:2:end) - mean_H2O(i-1,2:2:end),'linear','nearest');
-            H2O_diff = H2O_diff(zz_u(i-1,:));
-            mean_H2O(i,1:2:end) = mean_H2O(i,1:2:end) + H2O_diff;
+            %H2O_diff = griddedInterpolant(zz_p(i-1,:),mean_H2O(i,2:2:end) - mean_H2O(i-1,2:2:end),'linear','nearest');
+            %H2O_diff = H2O_diff(zz_u(i-1,:));
+            %mean_H2O(i,1:2:end) = mean_H2O(i,1:2:end) + H2O_diff;
             
             % Interpolate between grids
             phi_interp = griddedInterpolant(zz_p(i-1,:),phi(i,:),'linear','nearest');

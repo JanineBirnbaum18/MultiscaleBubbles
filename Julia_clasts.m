@@ -6,7 +6,7 @@ warning('off','MATLAB:nearlySingularMatrix')
 %Melt composition
 %[SiO2 TiO2 Al2O3 FeO(T) MnO MgO CaO Na2O K2O P2O5 H2O F2O-1]
 Krafla = [75.17 0.22 12.02 3.13 0.11 0.09 1.66 4.58 2.88 0 0 0];
-Composition = Krafla;
+Composition = Krafla;  
 H2Ot_0 = 0.12; %initial water concentration (wt. %)
 %Dynamics geometry
 Geometry = 'Radial'; 
@@ -47,7 +47,7 @@ phi_0 = (4/3).*pi()*R_0.^3./(1/Nb_0);
 P_0 = 101e3; % Initial surface pressure
 P_f = 101e3; % Final surface pressure
 dPdt = 1e-10;
-T_0 = 700 + 273.15; %Initial temperature in K
+T_0 = 600 + 273.15; %Initial temperature in K
 T_f = 1006 + 273.15;
 PTtModel = 'Jenny';
 Buoyancy = 'False';
@@ -57,12 +57,12 @@ tf = 40000;
 solve_T = true;
 
 % Discretization
-nt = 50;
+nt = 70;
 n_magma = 10;
-t_min = 10;
+t_min = 20;
 t_max = 200;
 
-radii = [0.0005, 0.001]
+radii = [0.0025];
 
 for i = 1:length(radii)
     radius = radii(i);
