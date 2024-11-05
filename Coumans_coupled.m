@@ -281,6 +281,7 @@ while t(max([1,i-1]))<tf && i<=nt
             % reset if stability not met
             if m>30
                 dt = 0.8*dt
+                t_min = dt;
                 n = 0; 
                 m = 0; 
                 t(i) = t(i-1) + dt;
