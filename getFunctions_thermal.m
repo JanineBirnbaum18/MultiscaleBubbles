@@ -40,46 +40,50 @@ max_iter = 10;
 T = T1;
 Ti = T1;
 
-while (n<max_iter && norm(T-Ti)>tol) || n==1
- 
-    [h1,h2,A,B,C,D,E,F] = FDcoeff(z_T);
-    dTdz = diag(-D(2:end),-1) + diag(-E) + diag(C(1:end-1),1);
-    dTdz(1,1:3) = [-A(1), B(1), -C(1)];
-    dTdz(end,end-2:end) = [D(end), -B(end), F(end)];
-    
-    dkdz = [-A(1)*k(1) + B(1)*k(2) - C(1)*k(3), ...
-            -D(2:end-1).*k(1:end-2) - E(2:end-1).*k(2:end-1) + C(2:end-1).*k(3:end), ...
-            D(end).*k(end-2) - B(end).*k(end-1) + F(end).*k(end)];
-    
-    d2Tdz2 = diag(2*h2(2:end)./(h1(2:end).*h2(2:end).*(h1(2:end)+h2(2:end))),-1) +...
-        diag(-2*(h1+h2)./(h1.*h2.*(h1+h2))) + ...
-        diag(2*h1(1:end-1)./(h1(1:end-1).*h2(1:end-1).*(h1(1:end-1)+h2(1:end-1))),1);
-    d2Tdz2(1,1:4) = [2*(3*h1(1) + 2*h2(1) + h2(3))./h1(1)./(h1(1) + h2(1))./(h1(1)+h2(1)+h2(3)), ...
-                 -2*(2*h1(1) + 2*h2(1) + h2(3))./h1(1)./h2(1)./(h2(1) + h2(3)),...
-                 2*(2*h1(1) + h2(1) + h2(3))./(h1(1) + h2(1))./h2(1)./h2(3),...
-                 -2*(2*h1(1) + h2(1))./(h1(1) + h2(1) + h2(3))./(h2(1) + h2(3))./h2(3)];
-    d2Tdz2(end,end-3:end) = [-2*(h2(end-2) + 2*h2(end))./h1(end-2)./(h1(end-2)+h2(end-2))./(h1(end-2) + h2(end-2) + h2(end)),...
-                         2*(h1(end-2) + h2(end-2) + 2*h2(end))./h1(end-2)./h2(end-2)./(h2(end-2)+h2(end)),...
-                         -2*(h1(end-2) + 2*h2(end-2) + 2*h2(end))./(h1(end-2)+h2(end-2))./h2(end-2)./h2(end),...
-                         2*(h1(end-2) + 2*h2(end-2) + 3*h2(end))./(h1(end-2) + h2(end-2) + h2(end))./(h2(end-2) + h2(end))./h2(end)];
+[h1,h2,A,B,C,D,E,F] = FDcoeff(z_T);
+dTdz = diag(-D(2:end),-1) + diag(-E) + diag(C(1:end-1),1);
+dTdz(1,1:3) = [-A(1), B(1), -C(1)];
+dTdz(end,end-2:end) = [D(end), -B(end), F(end)];
 
-    
-    TT = (1./rho./cp)'.*(dkdz'.*dTdz + k'.*d2Tdz2);
-    TR = (1./rho./cp)'.*flux;
-    
-    switch timescheme
-        case 'BDF1'
-        M = eye(size(TT)) - dt1.*TT;
-        b = T1' + dt1.*TR;
-    
-        case 'BDF2'
-            M = eye(size(TT)) - 1/Ft.*TT;
-            b = (-Dt/Ft.*T2' + Bt/Ft.*T1' + 1/Ft.*TR);
-    
-        case 'Steady'
-            M = -TT;
-            b = 0*T1';
-    end
+dkdz = [-A(1)*k(1) + B(1)*k(2) - C(1)*k(3), ...
+        -D(2:end-1).*k(1:end-2) - E(2:end-1).*k(2:end-1) + C(2:end-1).*k(3:end), ...
+        D(end).*k(end-2) - B(end).*k(end-1) + F(end).*k(end)];
+
+d2Tdz2 = diag(2*h2(2:end)./(h1(2:end).*h2(2:end).*(h1(2:end)+h2(2:end))),-1) +...
+    diag(-2*(h1+h2)./(h1.*h2.*(h1+h2))) + ...
+    diag(2*h1(1:end-1)./(h1(1:end-1).*h2(1:end-1).*(h1(1:end-1)+h2(1:end-1))),1);
+d2Tdz2(1,1:4) = [2*(3*h1(1) + 2*h2(1) + h2(3))./h1(1)./(h1(1) + h2(1))./(h1(1)+h2(1)+h2(3)), ...
+             -2*(2*h1(1) + 2*h2(1) + h2(3))./h1(1)./h2(1)./(h2(1) + h2(3)),...
+             2*(2*h1(1) + h2(1) + h2(3))./(h1(1) + h2(1))./h2(1)./h2(3),...
+             -2*(2*h1(1) + h2(1))./(h1(1) + h2(1) + h2(3))./(h2(1) + h2(3))./h2(3)];
+d2Tdz2(end,end-3:end) = [-2*(h2(end-2) + 2*h2(end))./h1(end-2)./(h1(end-2)+h2(end-2))./(h1(end-2) + h2(end-2) + h2(end)),...
+                     2*(h1(end-2) + h2(end-2) + 2*h2(end))./h1(end-2)./h2(end-2)./(h2(end-2)+h2(end)),...
+                     -2*(h1(end-2) + 2*h2(end-2) + 2*h2(end))./(h1(end-2)+h2(end-2))./h2(end-2)./h2(end),...
+                     2*(h1(end-2) + 2*h2(end-2) + 3*h2(end))./(h1(end-2) + h2(end-2) + h2(end))./(h2(end-2) + h2(end))./h2(end)];
+
+TT = (1./rho./cp)'.*(dkdz'.*dTdz + k'.*d2Tdz2);
+TR = (1./rho./cp)'.*flux;
+
+switch timescheme
+    case 'BDF1'
+    M = eye(size(TT)) - dt1.*TT;
+    b = T1' + dt1.*TR;
+
+    case 'BDF2'
+        M = eye(size(TT)) - 1/Ft.*TT;
+        b = (-Dt/Ft.*T2' + Bt/Ft.*T1' + 1/Ft.*TR);
+
+    case 'Steady'
+        M = -TT;
+        b = 0*T1';
+end
+
+% No flux at bottom
+M(1,:) = 0;
+M(1,1:3) = [-A(1), B(1), -C(1)];
+b(1) = 0;
+
+while (n<max_iter && norm(T-Ti)>tol) || n==1
     
     % Applied temperature at top
     switch BC_type
@@ -95,11 +99,6 @@ while (n<max_iter && norm(T-Ti)>tol) || n==1
         b(end) = BC(1).*BC(2) + 0*5.67e-8.*BC(2).^4;
     
     end
-    
-    % No flux at bottom
-    M(1,:) = 0;
-    M(1,1:3) = [-A(1), B(1), -C(1)];
-    b(1) = 0;
     
     Ti = T;
     T = (M\b)';
@@ -122,48 +121,50 @@ max_iter = 10;
 T = T1;
 Ti = T1;
 
+[h1,h2,A,B,C,D,E,F] = FDcoeff(z_T);
+dTdz = diag(-D(2:end),-1) + diag(-E) + diag(C(1:end-1),1);
+dTdz(1,1:3) = [-A(1), B(1), -C(1)];
+dTdz(end,end-2:end) = [D(end), -B(end), F(end)];
+
+dkdz = [-A(1)*k(1) + B(1)*k(2) - C(1)*k(3), ...
+        -D(2:end-1).*k(1:end-2) - E(2:end-1).*k(2:end-1) + C(2:end-1).*k(3:end), ...
+        D(end).*k(end-2) - B(end).*k(end-1) + F(end).*k(end)];
+
+d2Tdz2 = diag(2*h2(2:end)./(h1(2:end).*h2(2:end).*(h1(2:end)+h2(2:end))),-1) +...
+    diag(-2*(h1+h2)./(h1.*h2.*(h1+h2))) + ...
+    diag(2*h1(1:end-1)./(h1(1:end-1).*h2(1:end-1).*(h1(1:end-1)+h2(1:end-1))),1);
+d2Tdz2(1,1:4) = [2*(3*h1(1) + 2*h2(1) + h2(3))./h1(1)./(h1(1) + h2(1))./(h1(1)+h2(1)+h2(3)), ...
+             -2*(2*h1(1) + 2*h2(1) + h2(3))./h1(1)./h2(1)./(h2(1) + h2(3)),...
+             2*(2*h1(1) + h2(1) + h2(3))./(h1(1) + h2(1))./h2(1)./h2(3),...
+             -2*(2*h1(1) + h2(1))./(h1(1) + h2(1) + h2(3))./(h2(1) + h2(3))./h2(3)];
+d2Tdz2(end,end-3:end) = [-2*(h2(end-2) + 2*h2(end))./h1(end-2)./(h1(end-2)+h2(end-2))./(h1(end-2) + h2(end-2) + h2(end)),...
+                     2*(h1(end-2) + h2(end-2) + 2*h2(end))./h1(end-2)./h2(end-2)./(h2(end-2)+h2(end)),...
+                     -2*(h1(end-2) + 2*h2(end-2) + 2*h2(end))./(h1(end-2)+h2(end-2))./h2(end-2)./h2(end),...
+                     2*(h1(end-2) + 2*h2(end-2) + 3*h2(end))./(h1(end-2) + h2(end-2) + h2(end))./(h2(end-2) + h2(end))./h2(end)];
+
+
+TT = (1./rho./cp)'.*((2*k./z_T + dkdz)'.*dTdz + k'.*d2Tdz2);
+
+switch timescheme
+    case 'BDF1'
+    M = eye(size(TT)) - dt1.*TT;
+    b = T1';
+
+    case 'BDF2'
+        M = eye(size(TT)) - 1/Ft.*TT;
+        b = (-Dt/Ft.*T2' + Bt/Ft.*T1');
+
+    case 'Steady'
+        M = -TT;
+        b = 0*T1';
+end
+
+% Symmetry in temperature
+M(1,:) = 0;
+M(1,1:3) = [-A(1), B(1), -C(1)];
+b(1) = 0;
+
 while (n<max_iter && norm(T-Ti)>tol) || n==1
-
- 
-    [h1,h2,A,B,C,D,E,F] = FDcoeff(z_T);
-    dTdz = diag(-D(2:end),-1) + diag(-E) + diag(C(1:end-1),1);
-    dTdz(1,1:3) = [-A(1), B(1), -C(1)];
-    dTdz(end,end-2:end) = [D(end), -B(end), F(end)];
-    
-    dkdz = [-A(1)*k(1) + B(1)*k(2) - C(1)*k(3), ...
-            -D(2:end-1).*k(1:end-2) - E(2:end-1).*k(2:end-1) + C(2:end-1).*k(3:end), ...
-            D(end).*k(end-2) - B(end).*k(end-1) + F(end).*k(end)];
-    
-    d2Tdz2 = diag(2*h2(2:end)./(h1(2:end).*h2(2:end).*(h1(2:end)+h2(2:end))),-1) +...
-        diag(-2*(h1+h2)./(h1.*h2.*(h1+h2))) + ...
-        diag(2*h1(1:end-1)./(h1(1:end-1).*h2(1:end-1).*(h1(1:end-1)+h2(1:end-1))),1);
-    d2Tdz2(1,1:4) = [2*(3*h1(1) + 2*h2(1) + h2(3))./h1(1)./(h1(1) + h2(1))./(h1(1)+h2(1)+h2(3)), ...
-                 -2*(2*h1(1) + 2*h2(1) + h2(3))./h1(1)./h2(1)./(h2(1) + h2(3)),...
-                 2*(2*h1(1) + h2(1) + h2(3))./(h1(1) + h2(1))./h2(1)./h2(3),...
-                 -2*(2*h1(1) + h2(1))./(h1(1) + h2(1) + h2(3))./(h2(1) + h2(3))./h2(3)];
-    d2Tdz2(end,end-3:end) = [-2*(h2(end-2) + 2*h2(end))./h1(end-2)./(h1(end-2)+h2(end-2))./(h1(end-2) + h2(end-2) + h2(end)),...
-                         2*(h1(end-2) + h2(end-2) + 2*h2(end))./h1(end-2)./h2(end-2)./(h2(end-2)+h2(end)),...
-                         -2*(h1(end-2) + 2*h2(end-2) + 2*h2(end))./(h1(end-2)+h2(end-2))./h2(end-2)./h2(end),...
-                         2*(h1(end-2) + 2*h2(end-2) + 3*h2(end))./(h1(end-2) + h2(end-2) + h2(end))./(h2(end-2) + h2(end))./h2(end)];
-
-    
-    TT = (1./rho./cp)'.*((2*k./z_T + dkdz)'.*dTdz + k'.*d2Tdz2);
-    
-    switch timescheme
-        case 'BDF1'
-        M = eye(size(TT)) - dt1.*TT;
-        b = T1';
-    
-        case 'BDF2'
-            M = eye(size(TT)) - 1/Ft.*TT;
-            b = (-Dt/Ft.*T2' + Bt/Ft.*T1');
-    
-        case 'Steady'
-            M = -TT;
-            b = 0*T1';
-    end
-    
-    
     % Applied temperature at outer edge
     switch BC_type
         case 'Dirichlet'
@@ -177,11 +178,6 @@ while (n<max_iter && norm(T-Ti)>tol) || n==1
         M(end,end-2:end) = k(end).*[D(end), -B(end), F(end)] + [0,0,BC(1) + 0*5.67e-8.*Ti(end-1).^3];
         b(end) = BC(1).*BC(2) + 0*5.67e-8.*BC(2).^4;
     end
-    
-    % Symmetry in temperature
-    M(1,:) = 0;
-    M(1,1:3) = [-A(1), B(1), -C(1)];
-    b(1) = 0;
     
     Ti = T;
     T = (M\b)';

@@ -277,11 +277,12 @@ while t(max([1,i-1]))<tf && i<=nt
         n = 0;
         m = 0;
         mm = 0;
+        P_guess = zeros(31,length(z_p));
+        P_err = zeros(31,length(z_p));
         while ((erri>tol) || (n==0) || (m<3)) && (mm<5);
             % reset if stability not met
             if m>30
                 dt = 0.8*dt
-                t_min = dt;
                 n = 0; 
                 m = 0; 
                 t(i) = t(i-1) + dt;
@@ -319,11 +320,11 @@ while t(max([1,i-1]))<tf && i<=nt
             end            
 
             % Interpolation between grids
-            phi_interp = griddedInterpolant(zz_p(i-1,:),phi(i-1+n,:),'linear','nearest');
-            phi_interp = phi_interp(zz_t(i-1,:));
+            phi_interp = griddedInterpolant(log10(zz_p(i-1,:)),phi(i-1+n,:),'linear','nearest');
+            phi_interp = phi_interp(log10(zz_t(i-1,:)));
             phi_interp(phi_interp>0.999) = 0.999;
-            pb_interp = griddedInterpolant(zz_p(i-1,:),pb(i-1+n,:),'linear','nearest');
-            pb_interp = pb_interp(zz_t(i-1,:));
+            pb_interp = griddedInterpolant(log10(zz_p(i-1,:)),pb(i-1+n,:),'linear','nearest');
+            pb_interp = pb_interp(log10(zz_t(i-1,:)));
 
             if solve_T
                 rho(i,:) = rhoFun(melt_rho,T(i-1+n,:)).*(1-phi_interp) + density(pb_interp,T(i-1+n,:)',coefficients()).*phi_interp;
@@ -358,7 +359,6 @@ while t(max([1,i-1]))<tf && i<=nt
     
             else
                 T(i,:) = PT(nt+i);
-                BC_Ti = T(i,end);
             end
 
             % Diffusive gas loss
@@ -366,12 +366,11 @@ while t(max([1,i-1]))<tf && i<=nt
             mean_H2O(i,:) = mean_H2O(i-1,:);
             switch OutgasModel
                 case 'Diffusive'
-                    P_interp = griddedInterpolant(zz_p(i-1,:),P(i-1,:),'linear','nearest');
-                    P_interp = P_interp(zz_t(i-1,:));
+                    P_interp = griddedInterpolant(log10(zz_p(i-1,:)),P(i-1,:),'linear','nearest');
+                    P_interp = P_interp(log10(zz_t(i-1,:)));
                     D = DiffFun(mean_H2O(i-1,:),T(i,:), P_interp, W);
-                    mean_H2O_diff = OutgasFun(mean_H2O(i-1,:),mean_H2O(i-1,:),D,zz_t(i-1,:),dt,dt,SolFun(BC_Ti,pp),'BDF1');
-                    mean_H2O(i,1:2:end) = mean_H2O_diff(1:2:end);
-                    H2O(i,:,end) = mean_H2O_diff(2:2:end);                    
+                    mean_H2O_diff = OutgasFun(mean_H2O(i-1,:),mean_H2O(i-1,:),D,zz_t(i-1,:),dt,dt,SolFun(BC_T(end),pp),'BDF1');
+                    H2O(i,:,end) = mean_H2O_diff(2:2:end);     
             end
 
             % Run Coumans 2020 for each pressure node
@@ -391,33 +390,45 @@ while t(max([1,i-1]))<tf && i<=nt
 
                 else         
                     % Project pressure and temperature
-                    if i >2
-                        dTdti = Dt*T(i-2,j) -Bt*T(i-1,j) + Ft*T(i,j);
+                    dTdti = (T(i,j) - T(i-1,j))/dt;
+                    if i > 2
                         if n == 0
                             if i>3
                                 h1 = t(i-1) - t(i-2);
                                 h2 = t(i-2) - t(i-3);
                                 dPdti = (P(i-1,j)-P(i-2,j))./(t(i-1)-t(i-2)) + (h2.*P(i-3,j) - (h1 + h2).*P(i-2,j) + h1.*P(i-1,j))./(h1.*h2.*(h1 + h2))*dt;
                             else
-                                dPdti = (P(i-1,j)-P(i-2,j))./(t(i-1)-t(i-2));
+                                dPdti = 0;
                             end
                             Pf = P(i-1,j) + dPdti*dt;
+                        %elseif m>5
+                        %    Pf = 
                         else
-                            dPdti = Dt*P(i-2,j) -Bt*P(i-1,j) + Ft*P_temp(j);
                             Pf = P_temp(j);
+                            dPdti = (P_temp(j)-P(i-1,j))/dt;
                         end
                     else
-                        dTdti = (T(i,j) - T(i-1,j))./dt;
-
                         if n == 0
-                            dPdti = 0;
-                            Pf = P(i-1,j);
+                            H2O_forecast = (SolFun(T_0,P_0)-H2Ot_0).*erfc(xH2O(1,:,:)./(2*sqrt(DiffFun(H2Ot_0,T_0,P_0,W)*(t(i))))) + H2Ot_0;
+                            I1=trapz(squeeze(xH2O(1,j,:).^3),squeeze((1/100)*H2O(1,j,:)),1);
+                            I2=trapz(squeeze(xH2O(1,j,:).^3),squeeze((1/100)*H2O_forecast(1,j,:)),1);                                                                                                                                                                                                                           
+                            m_forecast=m_loss(1,j)+4.*pi.*melt_rho.*(I1-I2);
+
+                            Pf = w*pb_fun(m_forecast,T_0,R_0) + (1-w)*P_0;
+                            dPdti = (Pf - P(i-1,j))./dt;
                         else
                             dPdti = (P_temp(j) - P(i-1,j))./dt;
                             Pf = P_temp(j);
                         end
                     end
 
+                    if (rem(m,5)==0) & m>1
+                        fitobject = fit(P_err(1:m,j),P_guess(1:m,j),'linear','Exclude',P_guess(1:m,j)<1e4);
+                        Pf = fitobject(0);
+                    end
+
+                    P_guess(m+1,j) = Pf;
+                    
                     % Call Coumans 2020
                     [ti, Ri, phii, Pii, Tii, x_out, H2Ot_all, Nbi, pbi, mi] =  Numerical_Model_v2(Composition, SolModel, DiffModel,...
                         ViscModel, EOSModel,OutgasModel, 'Evolving', SurfTens, melt_rho, Nodes,...
@@ -440,17 +451,17 @@ while t(max([1,i-1]))<tf && i<=nt
                 end
             end
 
-            %H2O_diff = griddedInterpolant(zz_p(i-1,:),mean_H2O(i,2:2:end) - mean_H2O(i-1,2:2:end),'linear','nearest');
-            %H2O_diff = H2O_diff(zz_u(i-1,:));
-            %mean_H2O(i,1:2:end) = mean_H2O(i,1:2:end) + H2O_diff;
+            H2O_diff = griddedInterpolant(log10(zz_p(i-1,:)),mean_H2O(i,2:2:end) - mean_H2O(i-1,2:2:end),'linear','nearest');
+            H2O_diff = H2O_diff(log10(zz_u(i-1,:)));
+            mean_H2O(i,1:2:end) = mean_H2O(i,1:2:end) + H2O_diff;
             
             % Interpolate between grids
-            phi_interp = griddedInterpolant(zz_p(i-1,:),phi(i,:),'linear','nearest');
-            phi_interp = phi_interp(zz_t(i-1,:));
+            phi_interp = griddedInterpolant(log10(zz_p(i-1,:)),phi(i,:),'linear','nearest');
+            phi_interp = phi_interp(log10(zz_t(i-1,:)));
             phi_interp(phi_interp>0.999) = 0.999;
             pb(i,pb(i,:)<1) = 1;
-            pb_interp = griddedInterpolant(zz_p(i-1,:),pb(i,:),'linear','nearest');
-            pb_interp = pb_interp(zz_t(i-1,:));
+            pb_interp = griddedInterpolant(log10(zz_p(i-1,:)),pb(i,:),'linear','nearest');
+            pb_interp = pb_interp(log10(zz_t(i-1,:)));
             
             gas_rho = density(pb_interp,T(i,:)',coefficients());
             if solve_T
@@ -489,7 +500,13 @@ while t(max([1,i-1]))<tf && i<=nt
                     beta(i,:),dbetadt(i,:),radius,g,zz_p(i-1,:),zz_u(i-1,:),dt,t(i-1)-t(i-2),'BDF2');
             end
 
-            P_temp = ((P(i-1+n,:) + dt*dPdti) + (Pi + mean(Plith)))/2;
+            if exist('P_temp','var')
+                P_err(m+1,:) = P_temp - (Pi + mean(Plith));
+            else
+                P_err(m+1,:) = Pf - (Pi + mean(Plith));
+            end
+
+            P_temp = (1-w)*(P(i-1+n,:) + dt*dPdti) + w*(Pi + mean(Plith));
             P(i,:) = Pi + mean(Plith);
             erri = norm(u(i,:) - ui)./max(((norm(u(i,:)) + norm(u(i-1,:)))/2),1e-12);
             u(i,:) = ui;
@@ -500,7 +517,7 @@ while t(max([1,i-1]))<tf && i<=nt
                 case 'Radial'
                     dudr = (u(i,2:end) - u(i,1:end-1))./(zz_u(i-1,2:end)-zz_u(i-1,1:end-1));
                 case 'Cylindrical'
-                    dudr = -3*u_interp/radius;
+                    dudr = 3*u_interp/radius;
             end
 
             if i>2
@@ -533,7 +550,7 @@ while t(max([1,i-1]))<tf && i<=nt
                 case 'Radial'
                     transverse_strain_rate(i,2:end) = 1./zz_u(i-1,2:end).*u(i,2:end).*melt_visc(i,3:2:end)/1e10;
                 case 'Cylindrical'
-                    transverse_strain_rate(i,:) = dudr.*melt_visc(i,1:2:end)/1e10;
+                    transverse_strain_rate(i,:) = (3*u(i,:)/radius).*melt_visc(i,1:2:end)/1e10;
             end
             
             if i>2

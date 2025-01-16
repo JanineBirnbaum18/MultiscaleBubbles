@@ -16,7 +16,7 @@ BC_T = 1006+273.15;
 flux = 0;
 
 %Material properties
-SolModel = 'Liu 2005';
+SolModel = 'Ryan 2015';
 DiffModel = 'Zhang 2010 Metaluminous';
 ViscModel = 'Hess and Dingwell 1996';
 
@@ -47,7 +47,7 @@ phi_0 = (4/3).*pi()*R_0.^3./(1/Nb_0);
 P_0 = 101e3; % Initial surface pressure
 P_f = 101e3; % Final surface pressure
 dPdt = 1e-10;
-T_0 = 600 + 273.15; %Initial temperature in K
+T_0 = 1000 + 273.15; %Initial temperature in K
 T_f = 1006 + 273.15;
 PTtModel = 'Jenny';
 Buoyancy = 'False';
@@ -57,10 +57,10 @@ tf = 40000;
 solve_T = true;
 
 % Discretization
-nt = 70;
+nt = 10;
 n_magma = 10;
-t_min = 20;
-t_max = 200;
+t_min = 100;
+t_max = 500;
 
 radii = [0.0025];
 

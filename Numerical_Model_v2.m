@@ -209,10 +209,11 @@ I3=trapz(x, (v.*x.^2)./((R.^3-R_0.^3+x.^3).^2),1);
 dRdt= ((pb-P-(2.*(SurfTens)./R))./(12.*R.^2))./I3;
 
 %return rhs of ode
-dYdt = real([dJH2Odx(2:end);4*pi*melt_Rho*x(end)^2*FH2Ot;dRdt]);
+dYdt = real([dJH2Odx(2:end-1); dJH2Odx(end-1);4*pi*melt_Rho*x(end)^2*FH2Ot;dRdt]);
 
 switch OutgasModel
     case 'Diffusive'
+        dYdt = real([dJH2Odx(2:end);4*pi*melt_Rho*x(end)^2*FH2Ot;dRdt]);
         if (abs(dJH2Odx(end))>1e-20)
             dYdt(end-2) = 0;
         end
