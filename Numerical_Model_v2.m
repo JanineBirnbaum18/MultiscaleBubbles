@@ -210,7 +210,7 @@ Y = Y';
 %Get the bubble radius and phi
 R = Y(end,:);
 %Get all of the water profiles
-H2Ot_all = Y(1:end-2,:);
+H2Ot_all = Y(1:end-1,:);
 m_lost = Y(end-1,:);
 %phi = Porosity (Nb,R);
 [phi,Nb] = Porosity_conc (Nb_0,R_0,R);
@@ -219,7 +219,7 @@ m_lost = Y(end-1,:);
 x_out = (x.^3-R_0.^3+R.^3).^(1/3);
 
 I1=4.*pi.*melt_Rho.*(1/100).*trapz(x_out(:,1).^3,H2Ot_all(:,1),1)/3;
-I2=4.*pi.*melt_Rho.*(1/100).*trapz(x_out(:,1).^3,H2Ot_all(:,end),1)/3;
+I2=4.*pi.*melt_Rho.*(1/100).*trapz(x_out(:,end).^3,H2Ot_all(:,end),1)/3;
 
 n_out = min([max(find(diff(((diff(H2Ot_all(:,end))./diff(x_out(:,end))) < -1e-10) == 1)) + 1), size(H2Ot_all,1)]);
 I1_out = 4.*pi.*melt_Rho.*(1/100)*trapz(x_out(n_out:end,1).^3,H2Ot_0(n_out:end,1),1)/3;
