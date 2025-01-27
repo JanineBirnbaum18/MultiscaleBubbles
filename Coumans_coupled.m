@@ -18,13 +18,13 @@ addpath(mFolder)
 warning('off','MATLAB:illConditionedMatrix')
 warning('off','MATLAB:nearlySingularMatrix')
 
-
+% Gathers user-defined functions
 [SolFun, DiffFun, ViscFun, m0_fun, pb_fun,...
     PTt_fun_set] = getFunctions_v2(SolModel,DiffModel, ViscModel,...
     EOSModel, PTtModel);
 [SolFun, DiffFun, ViscFun, m0_fun, pb_fun,...
     PTt_fun] = getFunctions_v2(SolModel,DiffModel, ViscModel,...
-    EOSModel, 'Evolving');
+    EOSModel, 'Evolving'); % 
 [DynFun] = getFunctions_dynamic_dimensionless(Geometry,BC);
 [DarcyFun,PermFun,WaterViscModel,...
     OutgasFun] = getFunctions_outgas(Geometry,PermModel,OutgasModel);
@@ -222,6 +222,11 @@ while t(max([1,i-1]))<tf && i<=nt
         dt_stable = max([t_max,-min([0,min(1/2*(zz_t(i-1,2:end)-zz_t(i-1,1:end-1))./(u_t(2:end)-u_t(1:end-1)))])]);
 
         dt = min([t_max,max([t_min,dt]),dt_stable])
+        if i > 2
+            if (t(i-1) - t(i-2)) < t_min
+                dt = (t(i-1) - t(i-2));
+            end
+        end
 
         if any(P(i-1,:) < 0) | any(pb(i-1,:)<0) | any(isnan(P(i-1,:))) | any(abs(P(max(i-2,1),:)./P(i-1,:))>100)
             i = i-2
@@ -320,11 +325,11 @@ while t(max([1,i-1]))<tf && i<=nt
             end            
 
             % Interpolation between grids
-            phi_interp = griddedInterpolant(log10(zz_p(i-1,:)),phi(i-1+n,:),'linear','nearest');
-            phi_interp = phi_interp(log10(zz_t(i-1,:)));
+            phi_interp = griddedInterpolant((zz_p(i-1,:)),phi(i-1+n,:),'linear','nearest');
+            phi_interp = phi_interp((zz_t(i-1,:)));
             phi_interp(phi_interp>0.999) = 0.999;
-            pb_interp = griddedInterpolant(log10(zz_p(i-1,:)),pb(i-1+n,:),'linear','nearest');
-            pb_interp = pb_interp(log10(zz_t(i-1,:)));
+            pb_interp = griddedInterpolant((zz_p(i-1,:)),pb(i-1+n,:),'linear','nearest');
+            pb_interp = pb_interp((zz_t(i-1,:)));
 
             if solve_T
                 rho(i,:) = rhoFun(melt_rho,T(i-1+n,:)).*(1-phi_interp) + density(pb_interp,T(i-1+n,:)',coefficients()).*phi_interp;
@@ -366,8 +371,8 @@ while t(max([1,i-1]))<tf && i<=nt
             mean_H2O(i,:) = mean_H2O(i-1,:);
             switch OutgasModel
                 case 'Diffusive'
-                    P_interp = griddedInterpolant(log10(zz_p(i-1,:)),P(i-1,:),'linear','nearest');
-                    P_interp = P_interp(log10(zz_t(i-1,:)));
+                    P_interp = griddedInterpolant((zz_p(i-1,:)),P(i-1,:),'linear','nearest');
+                    P_interp = P_interp((zz_t(i-1,:)));
                     D = DiffFun(mean_H2O(i-1,:),T(i,:), P_interp, W);
                     mean_H2O_diff = OutgasFun(mean_H2O(i-1,:),mean_H2O(i-1,:),D,zz_t(i-1,:),dt,dt,SolFun(BC_T(end),pp),'BDF1');
                     H2O(i,:,end) = mean_H2O_diff(2:2:end);     
@@ -377,7 +382,7 @@ while t(max([1,i-1]))<tf && i<=nt
             for j = 1:length(z_p)
 
                 % Skip nodes that can't grow
-                if (R(i-1,j)<=1.01e-6 && SolFun(T(i-1,2*j),pb(i-1,j))>mean_H2O(i-1,2*j)) || T(i-1,2*j)<Tg
+                if (R(i-1,j)<=1.01e-5 && SolFun(T(i-1,2*j),pb(i-1,j))>mean_H2O(i-1,2*j)) || T(i-1,2*j)<Tg
                     Nb(i,j) = Nb(i-1,j);
                     R(i,j) = R(i-1,j);
                     phi(i,j) = phi(i-1,j);
@@ -409,9 +414,9 @@ while t(max([1,i-1]))<tf && i<=nt
                         end
                     else
                         if n == 0
-                            H2O_forecast = (SolFun(T_0,P_0)-H2Ot_0).*erfc(xH2O(1,:,:)./(2*sqrt(DiffFun(H2Ot_0,T_0,P_0,W)*(t(i))))) + H2Ot_0;
-                            I1=trapz(squeeze(xH2O(1,j,:).^3),squeeze((1/100)*H2O(1,j,:)),1);
-                            I2=trapz(squeeze(xH2O(1,j,:).^3),squeeze((1/100)*H2O_forecast(1,j,:)),1);                                                                                                                                                                                                                           
+                            H2O_forecast = (SolFun(T_0,P_0)-H2Ot_0).*erfc(xH2O(1,:,:)./(2*sqrt(0.1*DiffFun(H2Ot_0,T_0,P_0,W)*(t(i))))) + H2Ot_0;
+                            I1=trapz(squeeze(xH2O(1,j,:)),squeeze((1/100)*H2O(1,j,:)).*squeeze(xH2O(1,j,:).^2),1);
+                            I2=trapz(squeeze(xH2O(1,j,:)),squeeze((1/100)*H2O_forecast(1,j,:)).*squeeze(xH2O(1,j,:).^2),1);            
                             m_forecast=m_loss(1,j)+4.*pi.*melt_rho.*(I1-I2);
 
                             Pf = w*pb_fun(m_forecast,T_0,R_0) + (1-w)*P_0;
@@ -423,7 +428,7 @@ while t(max([1,i-1]))<tf && i<=nt
                     end
 
                     if (rem(m,5)==0) & m>1
-                        fitobject = fit(P_err(1:m,j),P_guess(1:m,j),'linear','Exclude',P_guess(1:m,j)<1e4);
+                        fitobject = fit(P_err(1:m,j),P_guess(1:m,j),'linear','Exclude',P_guess(1:m,j)<1);
                         Pf = fitobject(0);
                     end
 
@@ -451,17 +456,17 @@ while t(max([1,i-1]))<tf && i<=nt
                 end
             end
 
-            H2O_diff = griddedInterpolant(log10(zz_p(i-1,:)),mean_H2O(i,2:2:end) - mean_H2O(i-1,2:2:end),'linear','nearest');
-            H2O_diff = H2O_diff(log10(zz_u(i-1,:)));
+            H2O_diff = griddedInterpolant((zz_p(i-1,:)),mean_H2O(i,2:2:end) - mean_H2O(i-1,2:2:end),'linear','nearest');
+            H2O_diff = H2O_diff((zz_u(i-1,:)));
             mean_H2O(i,1:2:end) = mean_H2O(i,1:2:end) + H2O_diff;
             
             % Interpolate between grids
-            phi_interp = griddedInterpolant(log10(zz_p(i-1,:)),phi(i,:),'linear','nearest');
-            phi_interp = phi_interp(log10(zz_t(i-1,:)));
+            phi_interp = griddedInterpolant((zz_p(i-1,:)),phi(i,:),'linear','nearest');
+            phi_interp = phi_interp((zz_t(i-1,:)));
             phi_interp(phi_interp>0.999) = 0.999;
             pb(i,pb(i,:)<1) = 1;
-            pb_interp = griddedInterpolant(log10(zz_p(i-1,:)),pb(i,:),'linear','nearest');
-            pb_interp = pb_interp(log10(zz_t(i-1,:)));
+            pb_interp = griddedInterpolant((zz_p(i-1,:)),pb(i,:),'linear','nearest');
+            pb_interp = pb_interp((zz_t(i-1,:)));
             
             gas_rho = density(pb_interp,T(i,:)',coefficients());
             if solve_T

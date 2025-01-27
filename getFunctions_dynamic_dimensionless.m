@@ -407,7 +407,7 @@ d2udrdt_interp = d2udrdt_interp(z_t);
 Cc = max(sqrt((d2udrdt_interp'./dudr_interp').^2 + dudr_interp'.^2)./(L/U),1e-10)'.*a_interp.*eta_interp*Mu/SurfTens;
 eta0 = (1-phi_interp).^(-1);
 etainf = (1-phi_interp).^(5/3);
-etar = eta_interp.*(etainf + (eta0-etainf)./(1+(6/5*Cc).^2));
+etar = eta_interp.*(etainf);% + (eta0-etainf)./(1+(6/5*Cc).^2));
 etar(etar>1e12/Mu) = 1e12/Mu;
 
 detadz = -(1./h2).*[etar(1) etar(2:2:end-2) etar(end-1)] + (1./h2).*[etar(2) etar(4:2:end) etar(end)];
@@ -585,6 +585,8 @@ dPdz_u = diag(-1./h2(2:end),-1) + diag(1./h2);
 dPdz_u(1,1:2) = dPdz_u(2,1:2);
 dPdz_u = dPdz_u(:,1:end-1);
 
+[h1_end,h2_end,A_end,B_end,C_end,D_end,E_end,F_end] = FDcoeff([z_p(end-1:end), z_u(end)]);
+
 z_t = reshape([z_u; z_p, 0],1,[]);
 z_t = z_t(1:end-1);
 
@@ -611,7 +613,7 @@ PU = (-1./rho(2:2:end).*drhodz.*(1./beta + 1/2*P-P0))'.*u_interp + ...
     (-1./beta.*dbetadz.*(1/2*P-P0))'.*u_interp + ...
     (-1/2*(dPdz*P') + dP0dz').*u_interp + ...
     (-(1./beta + 1/2*P-P0))'.*dudz_P + ...
-    (-1./z_p.*(1./beta + 1/2*P-P0))'.*u_interp;
+    (-2./z_p.*(1./beta + 1/2*P-P0))'.*u_interp;
 
 dudr = dudz*u'; 
 dudr1 = dudz*u1';
@@ -675,9 +677,9 @@ b(length(P)+1) = 0;
 M(end,:) = 0;
 
 UP_end = 0*z_p;
-UP_end(end) = 1./rho_interp(end)./(z_u(end)-z_p(end));
+UP_end(end-1:end) = -1./rho_interp(end).*([D_end(2), -B_end(2)]);
 UR_end = 0*P0';
-UR_end = UR_end(end) + (1./rho_interp(end)).*(-1./(z_u(end)-z_p(end)).*P0(end));
+UR_end = UR_end(end) - (1./rho_interp(end)).*F_end(2).*P0(end);
 UU_end = 0*z_u;
 UU_end(end-3:end) = 1./rho_interp(end)*4/3*[(z_u(end-2)./z_u(end)).^2.*D(end).*etar(end-2).*(-D(end-2)),...
     (z_u(end-2)./z_u(end)).^2.*D(end)*etar(end-2).*(-E(end-2)-1./z_u(end-2)) + (z_u(end-1)./z_u(end)).^2.*(-B(end))*etar(end-1).*(-D(end-1)) + etar(end).*D(end),...

@@ -51,6 +51,9 @@ switch SolModel
        
     case 'Krafla_constant'
         SolFun = @(T,P)Krafla_sol(T);
+
+    case 'Schunke'
+        SolFun = @(T,P)Schunke_sol(T,P);
 end
 %==========================================================================
 %Return the target Diffusivity function
@@ -160,6 +163,10 @@ H2Oeq = 0.088 + 0*T;
 
 function H2Oeq = Krafla_sol(T)
 H2Oeq = 0.039 + 0*T;
+
+function H2Oeq = Schunke_sol(T,P)
+P = P*1e-6;
+H2Oeq =((276.8*sqrt(P)+71.15.*P-1.5223.*(P.^1.5))./T) + 0.0012439.*(P.^1.5);
 
 %==========================================================================
 %Diffusivity functions
@@ -295,7 +302,7 @@ pb = pb/1e-5; %1 pascal a 1e-5 bars
 %P-T-t functions
 %==========================================================================
 function out = Isobaric_Polythermal_Dwell_fun(P_0,T_0,T_f,dTdt,t)
-T_t_ramp = abs((T_f-T_0)/dTdt);1994
+T_t_ramp = abs((T_f-T_0)/dTdt);
 T = ((t<=T_t_ramp).*(T_0 + t.*dTdt))+((t>T_t_ramp).*T_f);
 P = P_0.*ones(size(t));
 out = [P, T];
