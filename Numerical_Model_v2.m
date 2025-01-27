@@ -196,7 +196,7 @@ switch OutgasModel
     case 'Diffusive'
         dYdt = real([dJH2Odx(2:end-1); dJH2Odx(end-1); dRdt]);
         if (abs(dJH2Odx(end))>1e-10)
-            dYdt(end-2) = 0;
+            dYdt(end-1) = 0;
         end
 end
 
@@ -211,7 +211,7 @@ Y = Y';
 R = Y(end,:);
 %Get all of the water profiles
 H2Ot_all = Y(1:end-1,:);
-m_lost = Y(end-1,:);
+%m_lost = Y(end-1,:);
 %phi = Porosity (Nb,R);
 [phi,Nb] = Porosity_conc (Nb_0,R_0,R);
 

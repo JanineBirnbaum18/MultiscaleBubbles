@@ -104,7 +104,7 @@ pp = 2.3e3;
 erri = 5e-4;
 tol = erri;
 mm = 0;
-w = 0.4;
+w = 0.7;
 
 % Plot options
 cmap = hot(2*length(t));
