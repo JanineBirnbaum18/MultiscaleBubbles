@@ -71,7 +71,7 @@ else
 end
 
 %Y_0 is a vector containing quantities to be solved for by ode15s
-Y_0 = [H2Ot;R_0];
+Y_0 = [H2Ot;0;R_0];
 
 %Declare the listener function
 xoverFcn=@(t,X)eventDetection(t,X);
@@ -108,9 +108,9 @@ function [dYdt, pb] =  MYodeFun(t,Y,x,xB,m_0,melt_Rho,T_0,P_0,H2Ot_0,R_0,W,SurfT
     T_f, dTdt, P_f, dPdt,t_quench, eta, z_p, j, Geometry,radius)
 
 %extract individual concentrations
-nx = (size(Y,1) - 1);
+nx = (size(Y,1) - 2);
 H2Ot = Y(1:nx,:);
-%m_lost = Y(end-1);
+m_lost = Y(end-1,:);
 R = Y(end,:);
 
 %Get current temperature and pressure
@@ -119,15 +119,28 @@ P = PT(:,1);
 T = PT(:,2);
 
 %Get mass of gas (Equation 7 from the main manuscript)
-I1=4.*pi.*melt_Rho.*(1/100)*trapz(x.^3,H2Ot_0,1)/3;
-I2=4.*pi.*melt_Rho.*(1/100)*trapz(x.^3,H2Ot,1)/3; 
+I12=4.*pi.*melt_Rho.*(1/100)*trapz(x.^3,H2Ot_0 -H2Ot,1)/3;
 
-n_out = min([max(find(diff((diff(H2Ot)./diff(x) < -1e-10)) == 1) + 1),nx]);
+n_out = max(find(diff((diff(H2Ot)./diff(x) < -1e-8)) == 1));
+if isempty(n_out)
+    if all((diff(H2Ot)./diff(x) < -1e-8)==1)
+        n_out = 1;
+    else
+        n_out = nx;
+    end
+end
 
-I1_out = 4.*pi.*melt_Rho.*(1/100)*trapz(x(n_out:end).^3,H2Ot_0(n_out:end),1)/3;
-I2_out = 4.*pi.*melt_Rho.*(1/100)*trapz(x(n_out:end).^3,H2Ot(n_out:end),1)/3;
+if abs(m_lost)>1e-16
+    n_out = 1;
+end
 
-m=max([0,m_0 + (I1-I2) - (I1_out-I2_out)]);
+%n_out = min([max(find(diff((diff(H2Ot)./diff(x) < -1e-8)) == 1)),nx])
+%crossings = fnzeros(fnder(makima(x,H2Ot_0 - H2Ot)));
+%[~,ind] = min(abs(reshape(crossings,1,[])-x(n_out)));
+
+%n_out = 25;
+m_loss = 4.*pi.*melt_Rho.*(1/100)*trapz(x(n_out:end).^3,H2Ot_0(n_out:end) - H2Ot(n_out:end),1)/3;
+m=max([0,m_0 + I12 - m_loss + m_lost]);
 
 %Compute pressure of the gas  in the bubble from EOS
 %(section 2.3.2 of main manuscript)
@@ -160,24 +173,23 @@ D = h2./h1./(h1+h2);
 E = (h1-h2)./h1./h2; 
 F = (h1 + 2*h2)./h2./(h1+h2);
 
-dH2Otdx = [-A(1)*H2O_BC(1) + B(1)*H2O_BC(2) - C(1)*H2O_BC(3); ...
-        -D(2:end-1).*H2O_BC(1:end-2) - E(2:end-1).*H2O_BC(2:end-1) + C(2:end-1).*H2O_BC(3:end); ...
-        D(end).*H2O_BC(end-2) - B(end).*H2O_BC(end-1) + F(end).*H2O_BC(end)];
-d2H2Otdx2 = (2*h2(2:end-1)./(h1(2:end-1).*h2(2:end-1).*(h1(2:end-1)+h2(2:end-1)))).*H2O_BC(1:end-2) +...
-    -2*(h1(2:end-1)+h2(2:end-1))./(h1(2:end-1).*h2(2:end-1).*(h1(2:end-1)+h2(2:end-1))).*H2O_BC(2:end-1) + ...
-    2*h1(2:end-1)./(h1(2:end-1).*h2(2:end-1).*(h1(2:end-1)+h2(2:end-1))).*H2O_BC(3:end);
-d2H2Otdx2 = [d2H2Otdx2(1); d2H2Otdx2; 
-             -2*(h2(end-2) + 2*h2(end))./h1(end-2)./(h1(end-2)+h2(end-2))./(h1(end-2) + h2(end-2) + h2(end))*H2O_BC(end-3) + ...
-             2*(h1(end-2) + h2(end-2) + 2*h2(end))./h1(end-2)./h2(end-2)./(h2(end-2)+h2(end))*H2O_BC(end-2) + ...
-             -2*(h1(end-2) + 2*h2(end-2) + 2*h2(end))./(h1(end-2)+h2(end-2))./h2(end-2)./h2(end)*H2O_BC(end-1) + ...
-             2*(h1(end-2) + 2*h2(end-2) + 3*h2(end))./(h1(end-2) + h2(end-2) + h2(end))./(h2(end-2) + h2(end))./h2(end)*H2O_BC(end)];
-dDH2Otdx  = [-A(1)*DH2Ot(1) + B(1)*DH2Ot(2) - C(1)*DH2Ot(3); ...
-        -D(2:end-1).*DH2Ot(1:end-2) - E(2:end-1).*DH2Ot(2:end-1) + C(2:end-1).*DH2Ot(3:end); ...
-        D(end).*DH2Ot(end-2) - B(end).*DH2Ot(end-1) + F(end).*DH2Ot(end)];
+ddx = sparse(diag(-D(2:end),-1) + diag(-E) + diag(C(1:end-1),1));
+ddx(1,1:3) = [-A(1), B(1), -C(1)];
+ddx(end,end-2:end) = [D(end), -B(end), F(end)];
 
-dJH2Odx = DH2Ot.*d2H2Otdx2 + dDH2Otdx.*dH2Otdx + 2./z.*DH2Ot.*dH2Otdx;
+d2dx2 = sparse(diag(2*h2(2:end)./(h1(2:end).*h2(2:end).*(h1(2:end)+h2(2:end))),-1) + ...
+    diag(-2*(h1+h2)./(h1.*h2.*(h1+h2))) + ...
+    diag(2*h1(1:end-1)./(h1(1:end-1).*h2(1:end-1).*(h1(1:end-1)+h2(1:end-1))),1));
+d2dx2(1,:) = d2dx2(2,:);
+d2dx2(end,:) = d2dx2(end,:);
 
-%FH2Ot = (4*pi*melt_Rho*z(end).^2)./100*DiffFun(H2Ot(end),T,P,W).*(dH2Otdx(end));
+dDH2Otdx = ddx*DH2Ot;
+
+M = DH2Ot.*d2dx2 + dDH2Otdx.*ddx + 2./z.*DH2Ot.*ddx;
+dJH2Odx = M*H2O_BC;
+
+dH2Otdx = (ddx*H2O_BC);
+FH2Ot = (4*pi*melt_Rho/100)*z(end).^2*DH2Ot(end).*(dH2Otdx(end));
 
 %====solve hydrodynamic equation====
 %Compute the viscosity
@@ -190,13 +202,18 @@ I3=trapz(x, (v.*x.^2)./((R.^3-R_0.^3+x.^3).^2),1);
 dRdt = ((pb-P-(2.*(SurfTens)./R))./(12.*R.^2))./I3;
 
 %return rhs of ode
-dYdt = real([dJH2Odx(2:end-1); dJH2Odx(end-1); dRdt]);
+dYdt = real([dJH2Odx(2:end-1); dJH2Odx(end-1); 0; dRdt]);
 
 switch OutgasModel
     case 'Diffusive'
-        dYdt = real([dJH2Odx(2:end-1); dJH2Odx(end-1); dRdt]);
-        if (abs(dJH2Odx(end))>1e-10)
-            dYdt(end-1) = 0;
+        if abs(dH2Otdx(end-1))>1e-10
+            dYdt = real([dJH2Odx(2:end-1); 0; 0; dRdt]);
+        %else
+        %    dYdt(end-1) = 0;
+        end
+
+        if n_out == 1
+            dYdt(end-1) = FH2Ot;
         end
 end
 
@@ -210,23 +227,38 @@ Y = Y';
 %Get the bubble radius and phi
 R = Y(end,:);
 %Get all of the water profiles
-H2Ot_all = Y(1:end-1,:);
-%m_lost = Y(end-1,:);
+H2Ot_all = Y(1:end-2,:);
+m_lost = Y(end-1,:);
 %phi = Porosity (Nb,R);
 [phi,Nb] = Porosity_conc (Nb_0,R_0,R);
 
 %Get the shell thickness for each R(t)
 x_out = (x.^3-R_0.^3+R.^3).^(1/3);
 
-I1=4.*pi.*melt_Rho.*(1/100).*trapz(x_out(:,1).^3,H2Ot_all(:,1),1)/3;
-I2=4.*pi.*melt_Rho.*(1/100).*trapz(x_out(:,end).^3,H2Ot_all(:,end),1)/3;
+m = 0*R;
+for i = 1:length(R)
+    I=4.*pi.*melt_Rho.*(1/100).*trapz(x_out(:,1).^3,H2Ot_all(:,1) - H2Ot_all(:,i),1)/3;
+    n_out = max(find(diff(((diff(H2Ot_all(:,i))./diff(x_out(:,i))) < -1e-10) == 1)) + 0);
+    if isempty(n_out)
+        if any((diff(H2Ot_all(:,i))./diff(x_out(:,i)) < -1e-8)==1)
+            n_out = 1;
+        else
+            n_out = size(H2Ot_all,1);
+        end
+    end
 
-n_out = min([max(find(diff(((diff(H2Ot_all(:,end))./diff(x_out(:,end))) < -1e-10) == 1)) + 1), size(H2Ot_all,1)]);
-I1_out = 4.*pi.*melt_Rho.*(1/100)*trapz(x_out(n_out:end,1).^3,H2Ot_0(n_out:end,1),1)/3;
-I2_out = 4.*pi.*melt_Rho.*(1/100)*trapz(x_out(n_out:end,end).^3,H2Ot_all(n_out:end,end),1)/3;
-m_loss = (I1_out-I2_out);
+    if any(abs(m_lost)>1e-16)
+        n_out = 1;
+    end
 
-m=m_0 + (I1-I2) - m_loss;
+    m_loss = 4.*pi.*melt_Rho.*(1/100).*trapz(x_out(n_out:end,i).^3,H2Ot_all(n_out:end,1)-H2Ot_all(n_out:end,i),1)/3;
+    m(i) = m_0 + I - m_loss + m_lost(i);
+end
+        
+%n_out = 25;
+%m_loss = 4.*pi.*melt_Rho.*(1/100).*trapz(x_out(n_out:end,end).^3,H2Ot_all(n_out:end,1)-H2Ot_all(n_out:end,end),1)/3;
+
+%m = m_0 + I - m_loss;
 
 %Get P-T-t history
 PT = PTt_fun(P_0, P_f, dPdt,T_0,T_f,dTdt,t_quench,t);
