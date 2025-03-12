@@ -517,8 +517,15 @@ Bt = (dt1 + dt2)/dt1/dt2;
 Dt = dt1/dt2/(dt1+dt2);
 Ft = (dt2+2*dt1)/dt1/(dt2+dt1);
 
-P = P1;
-u = u1;
+alphat = 2*dt1/(dt2*dt1*(dt1+dt2));
+betat = -2*(dt1+dt2)./(dt1.*dt2.*(dt1+dt2));
+gammat = 2*dt2/(dt1*dt2*(dt1+dt2));
+
+P = ((1-dt1*Bt+dt1^2/2*betat)*P1 + (dt1*Dt+dt1^2/2*alphat)*P2)/(1-dt1*Ft-dt1^2/2*gammat);
+u = ((1-dt1*Bt+dt1^2/2*betat)*u1 + (dt1*Dt+dt1^2/2*alphat)*u2)/(1-dt1*Ft-dt1^2/2*gammat);
+
+%P = P1;
+%u = u1;
 
 Vi = [P u]';
 V = 0;
@@ -640,7 +647,7 @@ d2udrdt_interp = d2udrdt_interp(z_t);
 Cc = max(sqrt((d2udrdt_interp'./dudr_interp').^2 + dudr_interp'.^2)./(L/U),1e-10)'.*a_interp.*eta_interp*Mu/SurfTens;
 eta0 = (1-phi_interp).^(-1);
 etainf = (1-phi_interp).^(5/3);
-etar = eta_interp.*(etainf + (eta0-etainf)./(1+(6/5*Cc).^2));
+etar = eta_interp.*(etainf);% + (eta0-etainf)./(1+(6/5*Cc).^2));
 etar(etar>1e12/Mu) = 1e12/Mu;
 
 detadz = -(1./h2).*[etar(1) etar(2:2:end-2) etar(end-2)] + (1./h2).*[etar(2) etar(4:2:end) etar(end-1)];
@@ -654,8 +661,8 @@ UU = 4/3*(1./rho_interp)'.*(etar'.*d2udz2 + 2.*etar'./z_u_fin'.*dudz - 2.*etar'.
 
 switch timescheme
     case 'BDF1'
-    M = eye(size([PP, PU; UP, UU])) - dt1/Re.*[PP, PU; UP, UU];
-    b = ([P1 u1]' + dt1/Re.*[PR; UR]);
+        M = eye(size([PP, PU; UP, UU])) - dt1/Re.*[PP, PU; UP, UU];
+        b = ([P1 u1]' + dt1/Re.*[PR; UR]);
 
     case 'BDF2'
         M = eye(size([PP, PU; UP, UU])) - 1/Ft/Re.*[PP, PU; UP, UU];
@@ -677,14 +684,11 @@ b(length(P)+1) = 0;
 M(end,:) = 0;
 
 UP_end = 0*z_p;
-UP_end(end-1:end) = -1./rho_interp(end).*([D_end(2), -B_end(2)]);
+UP_end(end-1:end) = - 1./rho_interp(end).*([D_end(2), -B_end(2)]);
 UR_end = 0*P0';
 UR_end = UR_end(end) - (1./rho_interp(end)).*F_end(2).*P0(end);
 UU_end = 0*z_u;
-UU_end(end-3:end) = 1./rho_interp(end)*4/3*[(z_u(end-2)./z_u(end)).^2.*D(end).*etar(end-2).*(-D(end-2)),...
-    (z_u(end-2)./z_u(end)).^2.*D(end)*etar(end-2).*(-E(end-2)-1./z_u(end-2)) + (z_u(end-1)./z_u(end)).^2.*(-B(end))*etar(end-1).*(-D(end-1)) + etar(end).*D(end),...
-    (z_u(end-2)./z_u(end)).^2.*D(end)*etar(end-2).*(C(end-2)) + (z_u(end-1)./z_u(end)).^2.*(-B(end))*etar(end-1).*(-E(end-1)-1./z_u(end-1)) + etar(end).*(-B(end)),...
-    (z_u(end-1)./z_u(end)).^2.*(-B(end))*etar(end-1).*C(end-1) + etar(end).*(F(end) - 1./z_u(end))];
+UU_end(end-3:end) = 1./rho_interp(end).*4/3.*etar(end).*d2udz2(end,end-3:end);
 
 switch timescheme
     case 'BDF1'

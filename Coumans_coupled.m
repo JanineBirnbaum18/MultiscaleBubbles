@@ -41,7 +41,7 @@ Nodes = 50; %Number of nodes in spatial discretization
 
 %Numerical tolerance:
 %[Absolute tolerance, relative tolerance], see:
-Numerical_Tolerance = [1e-5, 1e-5];
+Numerical_Tolerance = [1e-5, 1e-4];
 eta_max = 1e12;
 Tgfun = @(T) ViscFun(H2Ot_0,T,Composition) - 1e12;
 Tg = fzero(Tgfun,600+273);
@@ -54,13 +54,13 @@ t(2) = dt;
 % Spatial discretization
 switch Geometry
     case 'Radial'
-        z_t = radius*(1-logspace(0,-1,2*n_magma+1))*(1/(1-1e-1));
+        z_t = radius*(1-logspace(0,-0.8,2*n_magma+1))*(1/(1-10^-0.8));
         z_u = z_t(1:2:end);
         z_p = z_t(2:2:end);
         g = 0;
         
     case 'Cylindrical'
-        z_t = z_int0*(1-logspace(0,-1,2*n_magma+1))*(1/(1-1e-1)); 
+        z_t = z_int0*(1-logspace(0,-0.8,2*n_magma+1))*(1/(1-10^-0.8)); 
         z_u = z_t(1:2:end);
         z_p = z_t(2:2:end);
         g = 0;%9.81;
@@ -93,40 +93,35 @@ hoop_stress = zeros(size(tt_p));
 along_strain_rate = zeros(size(tt_u));
 transverse_strain_rate = zeros(size(tt_u));
 bubble_strain_rate = zeros(size(tt_p));
+dudr = zeros(size(tt_p));
 
-u_t = z_t;
-u_interp = 0*z_p;
+u_t = 0*z_t;
 
 W = Mass_SingleOxygen(Composition);
-pp = 2.3e3;
+pp = 2.3e3; % Partial pressure of water in surroundings
 
 % Model tolerances
 erri = 5e-4;
 tol = erri;
 mm = 0;
-w = 0.7;
+w = 0.7; % initial relaxation parameter (between 0 and 1)
 
 % Plot options
-cmap = hot(2*length(t));
+cmap = hot(2*length(t)); % colormap
 
+% Choose units for time axis according to total time
 if tf>5*24*60*60
     t_unit = 'days';
+    t_stretch = 24*60*60;
 elseif tf>5*60*60
     t_unit = 'hr';
+    t_stretch = 60*60;
 elseif tf>5*60
     t_unit = 'min';
+    t_stretch = 60;
 else
     t_unit = 's';
-end
-
-if contains(t_unit,'s')
     t_stretch = 1;
-elseif contains(t_unit,'min')
-    t_stretch = 60;
-elseif contains(t_unit,'hr')
-    t_stretch = 60*60;
-elseif contains(t_unit,'days')
-    t_stretch = 60*60*24;
 end
 
 % Initialize plots
@@ -134,20 +129,14 @@ f3 = figure(3); clf;
 switch Geometry
     case 'Radial'
         f3.Position = [400,100,600,700];
+        ax3 = create_axes(5,'vertical');
     case 'Cylindrical'
         f3.Position = [400,100,1200,700];
+        ax3 = create_axes(5,'horizontal');
 end
 set(gcf,'color','w');
 
 labels = {'Pressure (Pa)','Velocity (m/s)','Mean H2O (wt %)','\phi','Temperature (^oC)'};
-
-switch Geometry
-    case 'Radial'
-        ax3 = create_axes(5,'vertical');
-    case 'Cylindrical'
-        ax3 = create_axes(5,'horizontal');
-end
-
 linewidth = 2;
 
 % Initial conditions
@@ -156,6 +145,8 @@ i = 1;
 while t(max([1,i-1]))<tf && i<=nt
     % Step 1
     if i == 1
+
+        % get initial density
         phi_interp = phi_0;
         if solve_T       
             rho(i,:) = rhoFun(melt_rho,T_0 + T(1,:)).*(1-phi_interp) + density(P_0+(2.*(SurfTens)./R_0),T_0,coefficients()).*phi_interp;
@@ -164,6 +155,8 @@ while t(max([1,i-1]))<tf && i<=nt
         end
         
         dz = [(zz_p(1,2:end)-zz_p(1,1:end-1)),zz_p(1,end)-zz_p(1,end-1)];
+
+        % set initial pressure
         switch Geometry
             case 'Radial'
                 P(i,:) = P_0;
@@ -179,6 +172,8 @@ while t(max([1,i-1]))<tf && i<=nt
                         Plith = cumsum(rho(i,2:2:end).*dz*g,'reverse')-rho(i,end).*dz(end)/2*g + P_0;
                 end
         end
+
+        % read other variables from inputs
         T(i,:) = T_0;
 
         R(i,:) = R_0;
@@ -196,28 +191,24 @@ while t(max([1,i-1]))<tf && i<=nt
 
         melt_visc(i,:) = min(eta_max,ViscFun(H2Ot_0,T(i,:)',Composition));
         melt_visc(i,T(i)<=500) = eta_max./etar;
-        %melt_visc(i,end-1:end) = max(1,1e-4*min(melt_visc(i,1:end-2)));
         eta(i,:) =  melt_visc(i,2:2:end).*etar;
         beta(i,:) = phi(i,:)./P(i,:) + (1-phi(i,:)).*melt_beta;
-        dudr = 0;
-        dudr_prev = 0;
-        dudr_prev2 = 0;
+        dudr(i,:) = 0;
+        zz_u(i,:) = z_u;
+        zz_p(i,:) = z_p;
+        zz_t(i,:) = z_t;
 
     else 
 
         % Adaptive time stepping
-        u_t(1:2:end) = u(i-1,:);
-        u_t(2:2:end) = u_interp;
-        dt_stable = min(abs(1/2*(zz_t(i-1,2:end)-zz_t(i-1,1:end-1))./(u_t(2:end)-u_t(1:end-1))));
-        if dt_stable == 0
-            break
-        end
-
+        % Allow time step to grow or shrink based on acceleration
         if i>3
-            dt = dt*max(min(1.05,mean([(t(i-1)-t(i-2))/(t(i-2)-t(i-3)); (norm(u(i-2,:))/norm(u(i-1,:)))])),0.95);
+            dt = dt*max(min(1.01,mean([(t(i-1)-t(i-2))/(t(i-2)-t(i-3)); (norm(u(i-2,:))/norm(u(i-1,:)))])),0.99);
         end
 
+        % Restrict to keep spatial discretization stricly increasing
         u_t(1:2:end) = u(i-1,:);
+        u_interp = interp1(zz_u(i-1,:),u(i-1,:),zz_p(i-1,:),'linear');
         u_t(2:2:end) = u_interp;
         dt_stable = max([t_max,-min([0,min(1/2*(zz_t(i-1,2:end)-zz_t(i-1,1:end-1))./(u_t(2:end)-u_t(1:end-1)))])]);
 
@@ -228,71 +219,73 @@ while t(max([1,i-1]))<tf && i<=nt
             end
         end
 
+        % If pressure is non-physical back up with a smaller time step
         if any(P(i-1,:) < 0) | any(pb(i-1,:)<0) | any(isnan(P(i-1,:))) | any(abs(P(max(i-2,1),:)./P(i-1,:))>100)
-            i = i-2
-            if i>2
-                dt = (t(i-1) - t(i-2))*0.8
-            else
-                i = 2
-                dt = (t(2) - t(1))*0.8
-            end
             'Low pressure'
+            i = i-2
+            if i>2
+                dt = 0.8*(t(i)-t(i-1))
+            else
+                i = 2
+                dt = 0.8*(t(i)-t(i-1))
+            end
         end
 
+        % If spatial discretization not strictly increasing back up with a
+        % smaller time step
         if any((zz_t(i-1,2:end) - zz_t(i-1,1:end-1))<0)
-            i = i-2
-            if i>2
-                dt = (t(i-1) - t(i-2))*0.8
-            else
-                i = 2
-                dt = (t(2) - t(1))*0.8
-            end
             'Time step too large'
-            break 
-        end
-
-        if mm>5
             i = i-2
-
             if i>2
-                dt = (t(i-1) - t(i-2))*0.8
+                dt = 0.8*(t(i)-t(i-1))
             else
                 i = 2
-                dt = (t(2) - t(1))*0.8
+                dt = 0.8*(t(i)-t(i-1))
             end
-            'Failed to converge'
-            break
         end
 
+        % If solution failed to converge back up with a smaller time step
+        if mm>5
+            'Failed to converge'
+            i = i-2
+            if i>2
+                dt = 0.8*(t(i)-t(i-1))
+            else
+                i = 2
+                dt = 0.8*(t(i)-t(i-1))
+            end
+        end
+
+        % Caluclate coefficients for BDF2 time stepping scheme
         t(i) = t(i-1) + dt;
         if i>2
-            %[~,~,~,Bt,~,Dt,~,Ft] = FDcoeff(t(i-2:i));
             dt2 = t(i-1) - t(i-2);
             Bt = (dt + dt2)/dt/dt2;
             Dt = dt/dt2/(dt+dt2);
             Ft = (dt2+2*dt)/dt/(dt2+dt);
 
-        else
+        else % Bootstrap in with BDF1/backward Euler
             Dt = [0,0];
             Bt = [-1/dt,-1/dt];
             Ft = [1/dt, 1/dt];
         end
 
         % Main loop
-        n = 0;
-        m = 0;
-        mm = 0;
+        n = 0; % Is the first iteration
+        m = 0; % Iteration number
+        mm = 0; % Count failed tries
         P_guess = zeros(31,length(z_p));
         P_err = zeros(31,length(z_p));
-        while ((erri>tol) || (n==0) || (m<3)) && (mm<5);
+        while ((erri>tol) || (n==0) || (m<3)) && (mm<5)
             % reset if stability not met
             if m>30
-                dt = 0.8*dt
+                dt = 0.8*dt % smaller time step
+                w = max([0.2,0.9*w]) % more relaxation
                 n = 0; 
                 m = 0; 
                 t(i) = t(i-1) + dt;
-                mm = mm + 1;
-                if i>2
+                mm = mm + 1; % Failed tries
+                if i>2 % Reset time stepping coefficients after time change
                     %[~,~,~,Bt,~,Dt,~,Ft] = FDcoeff(t(i-2:i));
                     dt2 = t(i-1) - t(i-2);
                     Bt = (dt + dt2)/dt/dt2;
@@ -305,6 +298,7 @@ while t(max([1,i-1]))<tf && i<=nt
                 end
             end
 
+            % check that time step is small enough
             u_t(1:2:end) = u(i-1+n,:);
             u_t(2:2:end) = u_interp;
             dt_stable = min(1/2*(zz_t(i-1,2:end)-zz_t(i-1,1:end-1))./(u_t(2:end)-u_t(1:end-1)));
@@ -331,16 +325,15 @@ while t(max([1,i-1]))<tf && i<=nt
             pb_interp = griddedInterpolant((zz_p(i-1,:)),pb(i-1+n,:),'linear','nearest');
             pb_interp = pb_interp((zz_t(i-1,:)));
 
-            if solve_T
+            % Bulk density
+            if solve_T % Account for thermal expantion
                 rho(i,:) = rhoFun(melt_rho,T(i-1+n,:)).*(1-phi_interp) + density(pb_interp,T(i-1+n,:)',coefficients()).*phi_interp;
-                %rho(i,:) = melt_rho.*(1-phi_interp) + density(pb_interp,T(i-1+n,:)',coefficients()).*phi_interp;
             else
                 rho(i,:) = melt_rho.*(1-phi_interp) + density(pb_interp,T(i-1+n,:)',coefficients()).*phi_interp;
             end
     
+            % Thermal diffusion
             if solve_T
-                %H2O_interp = griddedInterpolant(zz_p(i-1,:),mean_H2O(i-1+n,:),'linear','nearest');
-                %H2O_interp = H2O_interp(zz_t(i-1,:));
                 cpmelt = cpmeltFun(Composition,T(i-1+n,:),mean_H2O(i-1+n,:));
                 cp = cpFun(phi_interp,cpmelt,rhoFun(melt_rho,T(i-1+n,:)),T(i-1+n,:),pb_interp);
                 k = kFun(phi_interp,kmelt);
@@ -349,17 +342,17 @@ while t(max([1,i-1]))<tf && i<=nt
                 PT = PTt_fun_set(P_0, P_f, dPdt,T_0,T_f,dTdt,t_quench,t(i));
   
                 switch BC_type
-                    case 'Forced'
+                    case 'Forced' % Set temperature at edge
                         BC_Ti = BC_T;
     
-                    case 'Dirichlet'
+                    case 'Dirichlet' % Set flux at edge
                         BC_Ti = PT(2);
                 end
    
                 if i == 2
-                    T(i,:) = ThermFun(T(i-1,:),T(i-1,:),rho(i,:),cp,k,zz_t(i-1,:),dt,dt,BC_Ti,flux,'BDF1');
+                    T(i,:) = ThermFun(T(i-1,:),T(i-1,:),rho(i,:),cp,k,zz_t(i-1,:),dt,dt,BC_Ti,flux,'BDF1'); % Bootstrap with BDF1
                 else
-                    T(i,:) = ThermFun(T(i-1,:),T(i-2,:),rho(i,:),cp,k,zz_t(i-1,:),dt,t(i-1)-t(i-2),BC_Ti,flux,'BDF2');
+                    T(i,:) = ThermFun(T(i-1,:),T(i-2,:),rho(i,:),cp,k,zz_t(i-1,:),dt,t(i-1)-t(i-2),BC_Ti,flux,'BDF2'); % BDF2
                 end
     
             else
@@ -367,15 +360,12 @@ while t(max([1,i-1]))<tf && i<=nt
             end
 
             % Diffusive gas loss
-            H2O(i,:,:) = H2O(i-1,:,:);
-            mean_H2O(i,:) = mean_H2O(i-1,:);
+            H2O_temp = squeeze(H2O(i-1,:,:));
             switch OutgasModel
                 case 'Diffusive'
-                    P_interp = griddedInterpolant((zz_p(i-1,:)),P(i-1,:),'linear','nearest');
-                    P_interp = P_interp((zz_t(i-1,:)));
-                    D = DiffFun(mean_H2O(i-1,:),T(i,:), P_interp, W);
-                    mean_H2O_diff = OutgasFun(mean_H2O(i-1,:),mean_H2O(i-1,:),D,zz_t(i-1,:),dt,dt,SolFun(BC_T(end),pp),'BDF1');
-                    H2O(i,:,end) = mean_H2O_diff(2:2:end);     
+                    D = DiffFun([mean_H2O(i-1,2:2:end),mean_H2O(i-1,end)],[T(i,2:2:end),T(i,end)], [P(i-1,:),P_0], W);
+                    mean_H2O_diff = OutgasFun([H2O(i-1,:,end),SolFun(BC_T(end),pp)],[H2O(i-1,:,end),SolFun(BC_T(end),pp)],D,[zz_p(i-1,:),zz_u(i-1,end)],dt,dt,SolFun(BC_T(end),pp),'BDF1');
+                    H2O_temp(:,end) = mean_H2O_diff(1:end-1);     
             end
 
             % Run Coumans 2020 for each pressure node
@@ -389,30 +379,31 @@ while t(max([1,i-1]))<tf && i<=nt
                     P(i,j) = P(i-1,j);
                     xH2O(i,j,:) = xH2O(i-1,j,:);
                     pb(i,j) = pb(i-1,j);
-                    dPdti = 0;
-                    Pi = 0;
                     m_loss(i,j) = m_loss(i-1,j);
 
                 else         
                     % Project pressure and temperature
                     dTdti = (T(i,j) - T(i-1,j))/dt;
                     if i > 2
-                        if n == 0
+                        if n == 0 % If first iteration at timestep, use current slope
                             if i>3
-                                h1 = t(i-1) - t(i-2);
-                                h2 = t(i-2) - t(i-3);
-                                dPdti = (P(i-1,j)-P(i-2,j))./(t(i-1)-t(i-2)) + (h2.*P(i-3,j) - (h1 + h2).*P(i-2,j) + h1.*P(i-1,j))./(h1.*h2.*(h1 + h2))*dt;
+                                h2 = t(i-1) - t(i-2);
+                                h1 = t(i-2) - t(i-3);
+                                D = h2./h1./(h1+h2);
+                                B = (h1+h2)./h1./h2;
+                                F = (h1 + 2*h2)./h2./(h1+h2);
+                                dPdti = D*P(i-3,j)-B*P(i-2,j)+F*P(i-1,j) + ...
+                                    (2*h2/(h1*h2*(h1+h2))*P(i-3,j)-2*(h1+h2)./(h1.*h2.*(h1+h2))*P(i-2,j) + ...
+                                    2*h1/(h1*h2*(h1+h2))*P(i-1,j))*dt/2;
                             else
-                                dPdti = 0;
+                                dPdti = 0; % Start from rest
                             end
-                            Pf = P(i-1,j) + dPdti*dt;
-                        %elseif m>5
-                        %    Pf = 
-                        else
-                            Pf = P_temp(j);
-                            dPdti = (P_temp(j)-P(i-1,j))/dt;
+                            Pf = max(1e-3,P(i-1,j) + dPdti*dt);
+                        else % Otherwise use most recent guess
+                            Pf = P(i,j);
+                            dPdti = (P(i,j)-P(i-1,j))/dt;
                         end
-                    else
+                    else % Bootstrap in with a diffusion-based projection
                         if n == 0
                             H2O_forecast = (SolFun(T_0,P_0)-H2Ot_0).*erfc(xH2O(1,:,:)./(2*sqrt(0.1*DiffFun(H2Ot_0,T_0,P_0,W)*(t(i))))) + H2Ot_0;
                             I1=trapz(squeeze(xH2O(1,j,:)),squeeze((1/100)*H2O(1,j,:)).*squeeze(xH2O(1,j,:).^2),1);
@@ -422,15 +413,16 @@ while t(max([1,i-1]))<tf && i<=nt
                             Pf = w*pb_fun(m_forecast,T_0,R_0) + (1-w)*P_0;
                             dPdti = (Pf - P(i-1,j))./dt;
                         else
-                            dPdti = (P_temp(j) - P(i-1,j))./dt;
-                            Pf = P_temp(j);
+                            dPdti = (P(i,j) - P(i-1,j))./dt;
+                            Pf = P(i,j);
                         end
                     end
 
-                    if (rem(m,5)==0) & m>1
-                        fitobject = fit(P_err(1:m,j),P_guess(1:m,j),'linear','Exclude',P_guess(1:m,j)<1);
-                        Pf = fitobject(0);
-                    end
+                    %if (rem(m,10)==0) & m>1
+                    %    fitobject = fit(P_err(2:m,j),P_guess(2:m,j),'linear','Exclude',P_guess(2:m,j)<1);
+                    %    Pf = fitobject(0);
+                    %    dPdti = (Pf - P(i-1,j))./dt;
+                    %end
 
                     P_guess(m+1,j) = Pf;
                     
@@ -438,36 +430,47 @@ while t(max([1,i-1]))<tf && i<=nt
                     [ti, Ri, phii, Pii, Tii, x_out, H2Ot_all, Nbi, pbi, mi] =  Numerical_Model_v2(Composition, SolModel, DiffModel,...
                         ViscModel, EOSModel,OutgasModel, 'Evolving', SurfTens, melt_rho, Nodes,...
                         R(i-1,j),...
-                        [squeeze(H2O(1,j,:)),squeeze(H2O(i,j,:)), squeeze(xH2O(i-1,j,:))], m_loss(i-1,j),...
+                        [squeeze(H2O(1,j,:)),H2O_temp(j,:)', squeeze(xH2O(i-1,j,:))], m_loss(i-1,j),...
                         Nb(i-1,j), 0, dt, T(i-1,j), T(i,j), dTdti,...
                         P(i-1,j), Pf,...
                         dPdti, 1e10, Numerical_Tolerance,...
                         eta(i-1+n,:), zz_p(i-1,:), j, Geometry, radius);
 
                     % Update solution with SOR
-                    Nb(i,j) = w*Nbi(end) + (1-w)*Nb(i-1+n,j);
-                    R(i,j) = w*Ri(end) + (1-w)*R(i-1+n,j);
-                    phi(i,j) = w*phii(end) + (1-w)*phi(i-1+n,j);
-                    xH2O(i,j,:) = x_out(:,end);
-                    H2O(i,j,:) = H2Ot_all(:,end);
-                    mean_H2O(i,2*j) = trapz(x_out(:,end).^3,H2Ot_all(:,end))./(x_out(end,end).^3-x_out(1,end).^3);
-                    pb(i,j) = w*pbi(end) + (1-w)*pb(i-1+n,j);
-                    m_loss(i,j) = w*mi(end) + (1-w)*m_loss(i-1+n,j);
+
+                    Nb(i,j) = ((1-w)*(1-n) + w)*Nbi(end) + n*(1-w)*Nb(i,j);
+                    R(i,j) = ((1-w)*(1-n) + w)*Ri(end) + n*(1-w)*R(i,j);
+                    phi(i,j) = ((1-w)*(1-n) + w)*phii(end) + n*(1-w)*phi(i,j);
+                    xH2O(i,j,:) = ((1-w)*(1-n) + w)*squeeze(x_out(:,end)) + n*squeeze((1-w)*xH2O(i,j,:));
+                    H2O(i,j,:) = ((1-w)*(1-n) + w)*squeeze(H2Ot_all(:,end)) + n*squeeze((1-w)*H2O(i,j,:));
+                    mean_H2O(i,2*j) = trapz(squeeze(xH2O(i,j,:)).^3,squeeze(H2O(i,j,:)))./(xH2O(i,j,end).^3-xH2O(i,j,1).^3);
+                    pb(i,j) = ((1-w)*(1-n) + w)*pbi(end) + n*(1-w)*pb(i,j);
+                    m_loss(i,j) = ((1-w)*(1-n) + w)*mi(end) + n*(1-w)*m_loss(i,j);
                 end
             end
 
-            H2O_diff = griddedInterpolant((zz_p(i-1,:)),mean_H2O(i,2:2:end) - mean_H2O(i-1,2:2:end),'linear','nearest');
-            H2O_diff = H2O_diff((zz_u(i-1,:)));
-            mean_H2O(i,1:2:end) = mean_H2O(i,1:2:end) + H2O_diff;
+            % Interpolate water concentration to all nodes for viscosity
+            % estimate
+            switch OutgasModel
+                case 'Diffusive'
+                    H2O_diff = griddedInterpolant([zz_p(i-1,:), zz_u(i-1,end)],[mean_H2O(i,2:2:end),SolFun(BC_T(end),pp)],'linear','nearest');
+                    mean_H2O(i,1:2:end) = H2O_diff([zz_u(i-1,1:end-1),(zz_p(i-1,end)+zz_u(i-1,end))/2]);
+                case 'None'
+                    H2O_diff = griddedInterpolant((zz_p(i-1,:)),mean_H2O(i,2:2:end),'linear','nearest');
+                    mean_H2O(i,1:2:end) = H2O_diff((zz_u(i-1,:)));
+            end
             
             % Interpolate between grids
-            phi_interp = griddedInterpolant((zz_p(i-1,:)),phi(i,:),'linear','nearest');
+            phi_interp = griddedInterpolant((zz_p(i-1,:)),phi(i,:),'linear','linear');
             phi_interp = phi_interp((zz_t(i-1,:)));
             phi_interp(phi_interp>0.999) = 0.999;
+            phi_interp(phi_interp<phi_0) = phi_0; 
             pb(i,pb(i,:)<1) = 1;
-            pb_interp = griddedInterpolant((zz_p(i-1,:)),pb(i,:),'linear','nearest');
+            pb_interp = griddedInterpolant((zz_p(i-1,:)),pb(i,:),'linear','linear');
             pb_interp = pb_interp((zz_t(i-1,:)));
+            pb_interp(pb_interp<1) = 1;
             
+            % Update bulk material properties
             gas_rho = density(pb_interp,T(i,:)',coefficients());
             if solve_T
                 rho(i,:) = rhoFun(melt_rho,T(i,:)).*(1-phi_interp) + gas_rho.*(phi_interp);
@@ -475,13 +478,11 @@ while t(max([1,i-1]))<tf && i<=nt
                 rho(i,:) = melt_rho*(1-phi_interp) + gas_rho.*(phi_interp);
             end
 
-            %H2O_interp = griddedInterpolant(zz_p(i-1,:),mean_H2O(i,:),'linear','nearest');
-            %H2O_interp = H2O_interp(zz_t(i-1,:));
-
             melt_visc(i,:) = min(eta_max,ViscFun(mean_H2O(i,:)',T(i,:)',Composition));
             melt_visc(i,T(i,:)<=500) = eta_max./etar;
             beta(i,:) = phi(i,:)./pb(i,:) + (1-phi(i,:)).*melt_beta;
 
+            % And their time derivatives
             if i == 2
                 drhodt(i,:) = (rho(i,2:2:end) - rho(i-1,2:2:end))./dt;
                 dbetadt(i,:) = (beta(i,:) - beta(i-1,:))./dt;
@@ -491,8 +492,7 @@ while t(max([1,i-1]))<tf && i<=nt
             end
             
 
-            % Dynamics
-    
+            % Viscous flow
             if i == 2 
                 [Pi, ui] = DynFun(P(i-1,:)-mean(Plith),u(i-1,:), ...
                     P(i-1,:)-mean(Plith),u(i-1,:),Plith-mean(Plith), ...
@@ -505,33 +505,28 @@ while t(max([1,i-1]))<tf && i<=nt
                     beta(i,:),dbetadt(i,:),radius,g,zz_p(i-1,:),zz_u(i-1,:),dt,t(i-1)-t(i-2),'BDF2');
             end
 
-            if exist('P_temp','var')
-                P_err(m+1,:) = P_temp - (Pi + mean(Plith));
-            else
-                P_err(m+1,:) = Pf - (Pi + mean(Plith));
-            end
+            P_err(m+1,:) = P(i,j) - (Pi + mean(Plith));
+            P(i,:) = n*(1-w)*P(i,:) + ((1-n)*(1-w) + w)*(Pi + mean(Plith));
 
-            P_temp = (1-w)*(P(i-1+n,:) + dt*dPdti) + w*(Pi + mean(Plith));
-            P(i,:) = Pi + mean(Plith);
             erri = norm(u(i,:) - ui)./max(((norm(u(i,:)) + norm(u(i-1,:)))/2),1e-12);
-            u(i,:) = ui;
+            u(i,:) = n*(1-w)*u(i,:) + ((1-n)*(1-w) + w)*ui;
             u_interp = interp1(zz_u(i-1,:),u(i,:),zz_p(i-1,:),'linear');
-           
+
             % Calculate capillary number
             switch Geometry
                 case 'Radial'
-                    dudr = (u(i,2:end) - u(i,1:end-1))./(zz_u(i-1,2:end)-zz_u(i-1,1:end-1));
+                    dudr(i,:) = 0*(u(i,2:end) - u(i,1:end-1))./(zz_u(i-1,2:end)-zz_u(i-1,1:end-1));
                 case 'Cylindrical'
-                    dudr = 3*u_interp/radius;
+                    dudr(i,:) = 3*u_interp/radius;
             end
 
             if i>2
-                d2udrdt = (Ft.*dudr - Bt.*dudr_prev + Dt*dudr_prev2);
+                d2udrdt = (Ft.*dudr(i,:) - Bt.*dudr(i-1,:) + Dt*dudr(i-2,:));
             else
                 d2udrdt = 0;
             end
 
-            Cc(i,:) = max(sqrt((d2udrdt./dudr).^2 + dudr.^2),1e-10).*R(i,:).*melt_visc(i,2:2:end).*etar/SurfTens;
+            Cc(i,:) = max(sqrt((d2udrdt./dudr(i,:)).^2 + dudr(i,:).^2),1e-10).*R(i,:).*melt_visc(i,2:2:end).*etar/SurfTens;
             eta0 = (1-phi(i,:)).^(-1);
             etainf = (1-phi(i,:)).^(5/3);
             eta(i,:) = melt_visc(i,2:2:end).*etar.*(etainf + (eta0-etainf)./(1+(6/5*Cc(i,:)).^2));
@@ -539,16 +534,16 @@ while t(max([1,i-1]))<tf && i<=nt
 
             % Permeable outgassing
 
-            min_density = density(Plith(end),T(i,2:2:end)',coefficients()).*4/3.*pi().*R(i,:).^3;
-            m_loss(i,:) = DarcyFun(pb_fun,m_loss(i,:),pb(i,:),Plith,radius,z_p,...
-                PermFun(phi(i,:),Cc(i,:)),...
-                WaterViscModel(gas_rho(2:2:end),T(i,2:2:end)),...
-                gas_rho(2:2:end),Nb(i,:),R(i,:),T(i,2:2:end),dt,min_density);
+            %min_density = density(Plith(end),T(i,2:2:end)',coefficients()).*4/3.*pi().*R(i,:).^3;
+            %m_loss(i,:) = DarcyFun(pb_fun,m_loss(i,:),pb(i,:),Plith,radius,z_p,...
+            %    PermFun(phi(i,:),Cc(i,:)),...
+            %    WaterViscModel(gas_rho(2:2:end),T(i,2:2:end)),...
+            %    gas_rho(2:2:end),Nb(i,:),R(i,:),T(i,2:2:end),dt,min_density);
             
             %m_loss(i,:) = max(min_density.*4/3.*pi().*R(i,:).^3,m_loss(i,:) + M*dt);
-            pb(i,:) = pb_fun(m_loss(i,:), T(i,2:2:end), R(i,:));
+            %pb(i,:) = pb_fun(m_loss(i,:), T(i,2:2:end), R(i,:));
 
-            % calculate failure
+            % Calculate failure
             hoop_stress(i,:) = (P(i,:)-P_0).*(radius)./(2*((zz_u(i-1,end)-zz_p(i-1,:))));
             along_strain_rate(i,2:end) = (u(i,2:end) - u(i,1:end-1))./(zz_u(i-1,2:end)-zz_u(i-1,1:end-1)).*melt_visc(i,3:2:end)/1e10;
             switch Geometry
@@ -632,9 +627,6 @@ while t(max([1,i-1]))<tf && i<=nt
         end
 
     end
-
-    dudr_prev2 = dudr_prev;
-    dudr_prev = dudr;
 
     %%%%%%%%%%%%%%%%%%%%%%% figure 3 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
