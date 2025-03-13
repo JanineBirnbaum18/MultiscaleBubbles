@@ -363,7 +363,7 @@ while t(max([1,i-1]))<tf && i<=nt
             H2O_temp = squeeze(H2O(i-1,:,:));
             switch OutgasModel
                 case 'Diffusive'
-                    D = DiffFun([mean_H2O(i-1,2:2:end),mean_H2O(i-1,end)],[T(i,2:2:end),T(i,end)], [P(i-1,:),P_0], W);
+                    D = DiffFun([H2O(i-1,:,end),H2O(i-1,end,end)],[T(i,2:2:end),T(i,end)], [P(i-1,:),P_0], W);
                     mean_H2O_diff = OutgasFun([H2O(i-1,:,end),SolFun(BC_T(end),pp)],[H2O(i-1,:,end),SolFun(BC_T(end),pp)],D,[zz_p(i-1,:),zz_u(i-1,end)],dt,dt,SolFun(BC_T(end),pp),'BDF1');
                     H2O_temp(:,end) = mean_H2O_diff(1:end-1);     
             end
@@ -376,8 +376,9 @@ while t(max([1,i-1]))<tf && i<=nt
                     Nb(i,j) = Nb(i-1,j);
                     R(i,j) = R(i-1,j);
                     phi(i,j) = phi(i-1,j);
-                    P(i,j) = P(i-1,j);
+                    H2O(i,j,:) = H2O(i-1,j,:);
                     xH2O(i,j,:) = xH2O(i-1,j,:);
+                    mean_H2O(i,2*j) = mean_H2O(i-1,2*j);
                     pb(i,j) = pb(i-1,j);
                     m_loss(i,j) = m_loss(i-1,j);
 
