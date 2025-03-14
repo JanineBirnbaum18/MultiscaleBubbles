@@ -98,7 +98,7 @@ dudr = zeros(size(tt_p));
 u_t = 0*z_t;
 
 W = Mass_SingleOxygen(Composition);
-pp = 2.3e3; % Partial pressure of water in surroundings
+pp = 0.1*101.3e3; %2.3e3; % Partial pressure of water in surroundings
 
 % Model tolerances
 erri = 5e-4;
