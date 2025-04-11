@@ -2,7 +2,7 @@ function [DarcyFun,PermFun,WaterViscModel,OutgasFun] = getFunctions_permeable(Ge
 
 switch Geometry
     case 'Radial'
-        DarcyFun = @(P,P0,radius,z_p,k,mu,rho)Spherical_perm(P,P0,radius,z_p,k,mu,rho);
+        DarcyFun = @(P,P0,radius,z_p,z_u,k,mu,rho)Spherical_perm(P,P0,radius,z_p,z_u,k,mu,rho);
         switch OutgasModel
             case 'Diffusive'
                 OutgasFun = @(H2O1, H2O2, K, z_T, dt1, dt2, BC, timescheme)Spherical_outgas(H2O1, H2O2, K, z_T, dt1, dt2, BC, timescheme);
@@ -10,7 +10,7 @@ switch Geometry
                 OutgasFun = @(H2O1, H2O2, K, z_T, dt1, dt2, BC, timescheme)(H2O1);
         end
     case 'Cylindrical'
-        DarcyFun = @(P,P0,radius,z_p,k,mu,rho)Cylindrical_perm(P,P0,radius,z_p,k,mu,rho);
+        DarcyFun = @(P,P0,radius,z_p,z_u,k,mu,rho)Cylindrical_perm(P,P0,radius,z_p,z_u,k,mu,rho);
         switch OutgasModel
             case 'Diffusive'
                 OutgasFun = @(H2O1, H2O2, K, z_T, dt1, dt2, BC, timescheme)Cylindrical_outgas(H2O1, H2O2, K, z_T, dt1, dt2, BC, timescheme);
@@ -32,11 +32,11 @@ end
 WaterViscModel = @(rho,T)IAPSViscModel(rho,T);
 
 % permeable outgassing
-function [M] = Cylindrical_perm(P,P0,radius,z_p,k,mu,rho)
-[h1,h2,A,B,C,D,E,F] = FDcoeff(z_p);
+function [M] = Cylindrical_perm(P,P0,radius,z_p,z_u,k,mu,rho)
+[h1,h2,A,B,C,D,E,F] = FDcoeff([z_p,z_u(end)]);
 
 dPdz = [-A(1)*P(1) + B(1)*P(2) - C(1)*P(3), ...
-        -D(2:end-1).*P(1:end-2) - E(2:end-1).*P(2:end-1) + C(2:end-1).*P(3:end), ...
+        -D(2:end-1).*P(1:end-1) - E(2:end-1).*P(2:end) + C(2:end-1).*[P(3:end),P0(end)], ...
         -D(end).*P(end-1) - E(end).*P(end) + C(end).*P0(end)];
 
 M = -k./mu.*pi().*radius.^2.*dPdz.*rho;

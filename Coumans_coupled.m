@@ -1,5 +1,5 @@
 function [u, phi, rho, drhodt, melt_visc, eta, P, H2O, xH2O, R, Nb, T, ...
-         Cc, pb, m_loss, zz_p, zz_u, zz_t, t,...
+         Cc, pb_loss, m_loss, zz_p, zz_u, zz_t, t,...
          hoop_stress, along_strain_rate, transverse_strain_rate, bubble_strain_rate] = Coumans_coupled(Composition, H2Ot_0, Geometry, radius, z_int0, ...
     BC, BC_type, BC_T, flux, SolModel, DiffModel, ViscModel, EOSModel, rhoModel,  PermModel, OutgasModel, ...
     SurfTens, melt_rho,...
@@ -87,6 +87,8 @@ Nb = zeros(size(tt_p));
 T = zeros(size(tt_t));
 Cc = zeros(size(tt_p));
 pb = zeros(size(tt_p));
+pb_loss = zeros(size(tt_p));
+m_bub = zeros(size(tt_p));
 m_loss = zeros(size(tt_p));
 mean_H2O =  zeros(size(tt_t));
 hoop_stress = zeros(size(tt_p));
@@ -180,6 +182,8 @@ while t(max([1,i-1]))<tf && i<=nt
         Nb(i,:) = Nb_0;
         phi(i,:) = phi_0;
         pb(i,:) = P(i,:)+(2.*(SurfTens)./R(i,:));
+        pb_loss(i,:) = P(i,:)+(2.*(SurfTens)./R(i,:));
+        m_bub(i,:) = m0_fun(R_0, pb(i,1), T(i,1));
         m_loss(i,:) = m0_fun(R_0, pb(i,1), T(i,1));
 
         H2O(i,:,:) = H2Ot_0;
@@ -220,7 +224,7 @@ while t(max([1,i-1]))<tf && i<=nt
         end
 
         % If pressure is non-physical back up with a smaller time step
-        if any(P(i-1,:) < 0) | any(pb(i-1,:)<0) | any(isnan(P(i-1,:))) | any(abs(P(max(i-2,1),:)./P(i-1,:))>100)
+        if any(P(i-1,:) < 0) | any(pb_loss(i-1,:)<0) | any(isnan(P(i-1,:))) | any(abs(P(max(i-2,1),:)./P(i-1,:))>100)
             'Low pressure'
             i = i-2
             if i>2
@@ -322,7 +326,7 @@ while t(max([1,i-1]))<tf && i<=nt
             phi_interp = griddedInterpolant((zz_p(i-1,:)),phi(i-1+n,:),'linear','nearest');
             phi_interp = phi_interp((zz_t(i-1,:)));
             phi_interp(phi_interp>0.999) = 0.999;
-            pb_interp = griddedInterpolant((zz_p(i-1,:)),pb(i-1+n,:),'linear','nearest');
+            pb_interp = griddedInterpolant((zz_p(i-1,:)),pb_loss(i-1+n,:),'linear','nearest');
             pb_interp = pb_interp((zz_t(i-1,:)));
 
             % Bulk density
@@ -372,7 +376,7 @@ while t(max([1,i-1]))<tf && i<=nt
             for j = 1:length(z_p)
 
                 % Skip nodes that can't grow
-                if (R(i-1,j)<=1.01e-5 && SolFun(T(i-1,2*j),pb(i-1,j))>mean_H2O(i-1,2*j)) || T(i-1,2*j)<Tg
+                if (R(i-1,j)<=1.01e-5 && SolFun(T(i-1,2*j),pb_loss(i-1,j))>mean_H2O(i-1,2*j)) || T(i-1,2*j)<Tg
                     Nb(i,j) = Nb(i-1,j);
                     R(i,j) = R(i-1,j);
                     phi(i,j) = phi(i-1,j);
@@ -387,6 +391,8 @@ while t(max([1,i-1]))<tf && i<=nt
                     xH2O(i,j,:) = xH2O(i-1,j,:);
                     mean_H2O(i,2*j) = trapz(squeeze(xH2O(i,j,:)).^3,squeeze(H2O(i,j,:)))./(xH2O(i,j,end).^3-xH2O(i,j,1).^3);
                     pb(i,j) = pb(i-1,j);
+                    pb_loss(i,j) = pb_loss(i-1,j);
+                    m_bub(i,j) = m_bub(i-1,j);
                     m_loss(i,j) = m_loss(i-1,j);
 
                 else         
@@ -453,7 +459,7 @@ while t(max([1,i-1]))<tf && i<=nt
                     H2O(i,j,:) = ((1-w)*(1-n) + w)*squeeze(H2Ot_all(:,end)) + n*squeeze((1-w)*H2O(i,j,:));
                     mean_H2O(i,2*j) = trapz(squeeze(xH2O(i,j,:)).^3,squeeze(H2O(i,j,:)))./(xH2O(i,j,end).^3-xH2O(i,j,1).^3);
                     pb(i,j) = ((1-w)*(1-n) + w)*pbi(end) + n*(1-w)*pb(i,j);
-                    m_loss(i,j) = ((1-w)*(1-n) + w)*mi(end) + n*(1-w)*m_loss(i,j);
+                    m_bub(i,j) = ((1-w)*(1-n) + w)*mi(end) + n*(1-w)*m_bub(i,j);
                 end
             end
 
@@ -541,15 +547,18 @@ while t(max([1,i-1]))<tf && i<=nt
             eta(eta>eta_max) = eta_max;
 
             % Permeable outgassing
-
-            %min_density = density(Plith(end),T(i,2:2:end)',coefficients()).*4/3.*pi().*R(i,:).^3;
-            %m_loss(i,:) = DarcyFun(pb_fun,m_loss(i,:),pb(i,:),Plith,radius,z_p,...
-            %    PermFun(phi(i,:),Cc(i,:)),...
-            %    WaterViscModel(gas_rho(2:2:end),T(i,2:2:end)),...
-            %    gas_rho(2:2:end),Nb(i,:),R(i,:),T(i,2:2:end),dt,min_density);
             
-            %m_loss(i,:) = max(min_density.*4/3.*pi().*R(i,:).^3,m_loss(i,:) + M*dt);
-            %pb(i,:) = pb_fun(m_loss(i,:), T(i,2:2:end), R(i,:));
+            switch PermModel
+                case 'None'
+                otherwise
+                    gas_rho = density(Plith(end),T(i,2:2:end)',coefficients());
+                    m_loss(i,:) = n*(1-w)*m_loss(i,:) + ((1-n)*(1-w) + w)*DarcyFun(m0_fun,m_bub(i,:),pb(i,:),Plith,radius,z_p,z_u,...
+                    PermFun(phi(i,:),Cc(i,:)),...
+                    WaterViscModel(gas_rho,T(i,2:2:end)),...
+                    gas_rho,Nb(i,:),R(i,:),T(i,2:2:end),dt,gas_rho);
+            
+                    pb_loss(i,:) = pb_fun(m_loss(i,:), T(i,2:2:end), R(i,:));
+            end
 
             % Calculate failure
             hoop_stress(i,:) = (P(i,:)-P_0).*(radius)./(2*((zz_u(i-1,end)-zz_p(i-1,:))));
@@ -699,6 +708,7 @@ if t(i-1)>tf
     T = T(1:i-1,:);
     Cc = Cc(1:i-1,:);
     pb = pb(1:i-1,:);
+    pb_loss = pb_loss(1:i-1,:);
     zz_p = zz_p(1:i-1,:);
     zz_u = zz_u(1:i-1,:);
     zz_t = zz_t(1:i-1,:);
@@ -717,7 +727,7 @@ f4 = figure(4); clf;
 f4.Position = [400,100,600,700];
 set(gcf,'color','w');
 
-ys = {P-P_0,pb-P-(2.*(SurfTens)./R),mean_H2O,phi};
+ys = {P-P_0,pb_loss-P-(2.*(SurfTens)./R),mean_H2O,phi};
 labels = {'\Delta Pressure (Pa)','Bubble overpressure (Pa)','Mean H2O (wt %)','\phi'};
 ax4 = create_axes(4,'vertical');
 for j = 1:4

@@ -2,8 +2,8 @@ function [DarcyFun,PermFun,WaterViscModel,OutgasFun] = getFunctions_outgas(Geome
 
 switch Geometry
     case 'Radial'
-        DarcyFun = @(pb_fun,M1,P,P0,radius,z_p,K,mu,rho,Nb,R,T,dt,...
-            min_density)Spherical_perm(pb_fun,M1,P,P0,radius,z_p,K,mu,rho,...
+        DarcyFun = @(m0_fun,M1,P,P0,radius,z_p,z_u,K,mu,rho,Nb,R,T,dt,...
+            min_density)Spherical_perm(m0_fun,M1,P,P0,radius,z_p,z_u,K,mu,rho,...
             Nb,R,T,dt,min_density);
         switch OutgasModel
             case 'Diffusive'
@@ -12,8 +12,8 @@ switch Geometry
                 OutgasFun = @(H2O1, H2O2, K, z_T, dt1, dt2, BC, timescheme)(H2O1);
         end
     case 'Cylindrical'
-        DarcyFun = @(pb_fun,M1,P,P0,radius,z_p,K,mu,rho,Nb,R,T,dt,...
-            min_density)Cylindrical_perm(pb_fun,M1,P,P0,radius,z_p,K,mu,...
+        DarcyFun = @(m0_fun,M1,P,P0,radius,z_p,z_u,K,mu,rho,Nb,R,T,dt,...
+            min_density)Cylindrical_perm(m0_fun,M1,P,P0,radius,z_p,z_u,K,mu,...
             rho,Nb,R,T,dt,min_density);
         switch OutgasModel
             case 'Diffusive'
@@ -36,52 +36,53 @@ end
 WaterViscModel = @(rho,T)IAPSViscModel(rho,T);
 
 % permeable outgassing
-function [M] = Cylindrical_perm(pb_fun,M1,P,P0,radius,z_p,K,mu,rho,Nb,R,T,...
+function [m_loss] = Cylindrical_perm(m0_fun,M1,P,P0,radius,z_p,z_u,K,mu,rho,Nb,R,T,...
     dt,min_density)
-[h1,h2,A,B,C,D,E,F] = FDcoeff(z_p);
+[h1,h2,A,B,C,D,E,F] = FDcoeff([z_p,z_u(end)]);
 
-dPdz = diag(-D(2:end),-1) + diag(-E) + diag(C(1:end-1),1);
-dPdz(1,1:3) = [-A(1), B(1), -C(1)];
-dPdz(end,end-1:end) = [-D(end), -E(end)];
+ddz = diag(-D(2:end-1),-1) + diag(-E(1:end-1)) + diag(C(1:end-2),1);
+ddz(1,1:3) = [-A(1), B(1), -C(1)];
+ddz(end,end-1:end) = [-D(end-1), -E(end-1)];
 
-dPdz = dPdz.*((1000./18.015).*8.314.*T)./((4.*pi./3).*R.^3)';
-dPdz_r = C(end).*((1000./18.015).*8.314.*T)./((4.*pi./3).*R.^3);
-dPdz_r(1:end) = 0;
 
-MM = eye(size(dPdz)) + (dt*1./(Nb.*(z_p.^3 - [0, z_p(1:end-1)].^3)).*K.*rho./mu)'.*dPdz;
-Mr = 1./(Nb.*(z_p.^3 - [0, z_p(1:end-1)].^3)).*K.*rho./mu.*dPdz_r;
-M = ((MM)\(M1 + dt*Mr)')';
-M0 = 0*M;
+PP = (dt*8.314.*T./(Nb.*(z_p - [0, z_p(1:end-1)]).*4/3*pi.*R.^3*18.015/1000).*K.*rho./mu)'.*ddz;
+Pr = zeros(size(z_p));
+Pr(end) = (dt*8.314.*T(end)./(Nb(end).*(z_p(end) -  z_p(end-1)).*4/3*pi.*R(end).^3*18.015/1000).*K(end).*rho(end)./mu(end))*C(end-1)*P0(end);
 
-if any(M>min_density)
-    i = 0;
-    while norm(M0-M)>1e-18 && i<10
-        M0 = M;
-    
-        P = pb_fun(M,T,R);
-        dPdz = [-A(1)*P(1) + B(1)*P(2) - C(1)*P(3), ...
-            -D(2:end-1).*P(1:end-2) - E(2:end-1).*P(2:end-1) + C(2:end-1).*P(3:end), ...
-            -D(end).*P(end-1) - E(end).*P(end) + C(end).*P0(end)];
-    
-        M_temp = M1 - dt*1./(Nb.*(z_p.^3 - [0, z_p(1:end-1)].^3)).*K.*rho./mu.*dPdz;
-        M(M0>min_density) = M_temp(M0>min_density);
-        M(M<min_density) = min_density(M<min_density);
-        i = i + 1;
-    end
-else
-    M(M<min_density) = min_density(M<min_density);
+M = eye(size(PP)) - PP;
+b = (P' + Pr');
+
+P_loss = (M\b)';
+
+m_loss = 0*z_p;
+for j = 1:length(z_p)
+    m_loss(j) = m0_fun(R(j),P_loss(j),T(j));
 end
+m_loss(m_loss<rho.*4/3*pi.*R.^3) = rho(m_loss<rho.*4/3*pi.*R.^3).*4/3*pi.*R(m_loss<rho.*4/3*pi.*R.^3).^3;
+%if any(M<rho_gas.*4/3*pi.*R.^3)
+%    i = 0;
+%    while norm(M0-M)>1e-18 && i<10
+%        M0 = M;
 
-function [M] = Spherical_perm(pb_fun,M1,P,P0,radius,z_p,K,mu,rho,Nb,R,T,...
+%        P = pb_fun(M,T,R);
+%        M_temp = M1 - (dt*1./(Nb.*([z_p(2:end) z_u(end)] - [0, z_p(1:end-1)])).*K.*rho./mu)'.*dPdz;
+%        M_temp(M_temp<rho_gas.*4/3*pi.*R.^3) = rho_gas(M_temp<rho_gas.*4/3*pi.*R.^3).*4/3*pi.*R(M<rho_gas.*4/3*pi.*R.^3).^3;
+%        i = i + 1;
+%    end
+%else
+%    M(M<min_density) = min_density(M<min_density);
+%end
+
+function [M] = Spherical_perm(m0_fun,M1,P,P0,radius,z_p,z_u,K,mu,rho,Nb,R,T,...
     dt,min_density)
-[h1,h2,A,B,C,D,E,F] = FDcoeff(z_p);
+[h1,h2,A,B,C,D,E,F] = FDcoeff([z_p,z_u(end)]);
 
-dPdz = diag(-D(2:end),-1) + diag(-E) + diag(C(1:end-1),1);
+dPdz = diag(-D(2:end-1),-1) + diag(-E(1:end-1)) + diag(C(1:end-2),1);
 dPdz(1,1:3) = [-A(1), B(1), -C(1)];
-dPdz(end,end-1:end) = [-D(end), -E(end)];
+dPdz(end,end-1:end) = [-D(end-1), -E(end-1)];
 
 dPdz = dPdz.*((1000./18.015).*8.314.*T)./((4.*pi./3).*R.^3)';
-dPdz_r = C(end).*((1000./18.015).*8.314.*T)./((4.*pi./3).*R.^3);
+dPdz_r = C(end-1).*((1000./18.015).*8.314.*T)./((4.*pi./3).*R.^3);
 dPdz_r(1:end) = 0;
 
 MM = eye(size(dPdz)) - (dt*3*z_p.^2./(Nb.*(z_p.^3 - [0, z_p(1:end-1)].^3)).*K.*rho./mu)'.*dPdz;
