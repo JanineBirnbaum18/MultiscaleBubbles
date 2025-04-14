@@ -100,7 +100,7 @@ dudr = zeros(size(tt_p));
 u_t = 0*z_t;
 
 W = Mass_SingleOxygen(Composition);
-pp = 0.1*101.3e3; %2.3e3; % Partial pressure of water in surroundings
+pp = 0.2*101.3e3; %2.3e3; % Partial pressure of water in surroundings
 
 % Model tolerances
 erri = 5e-4;
@@ -376,7 +376,7 @@ while t(max([1,i-1]))<tf && i<=nt
             for j = 1:length(z_p)
 
                 % Skip nodes that can't grow
-                if (R(i-1,j)<=1.01e-5 && SolFun(T(i-1,2*j),pb_loss(i-1,j))>mean_H2O(i-1,2*j)) || T(i-1,2*j)<Tg
+                if (R(i-1,j)<=1.01e-6 && SolFun(T(i-1,2*j),pb_loss(i-1,j))>mean_H2O(i-1,2*j)) || T(i-1,2*j)<Tg
                     Nb(i,j) = Nb(i-1,j);
                     R(i,j) = R(i-1,j);
                     phi(i,j) = phi(i-1,j);
@@ -550,6 +550,8 @@ while t(max([1,i-1]))<tf && i<=nt
             
             switch PermModel
                 case 'None'
+                    m_loss(i,:) = m_bub(i,:); 
+                    pb_loss(i,:) = pb(i,:);
                 otherwise
                     gas_rho = density(Plith(end),T(i,2:2:end)',coefficients());
                     m_loss(i,:) = n*(1-w)*m_loss(i,:) + ((1-n)*(1-w) + w)*DarcyFun(m0_fun,m_bub(i,:),pb(i,:),Plith,radius,z_p,z_u,...
