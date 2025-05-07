@@ -216,48 +216,44 @@ while t(max([1,i-1]))<tf && i<=nt
         u_t(2:2:end) = u_interp;
         dt_stable = max([t_max,-min([0,min(1/2*(zz_t(i-1,2:end)-zz_t(i-1,1:end-1))./(u_t(2:end)-u_t(1:end-1)))])]);
 
-        dt = min([t_max,max([t_min,dt]),dt_stable])
+        dt = min([t_max,max([t_min,dt]),dt_stable]);
         if i > 2
             if (t(i-1) - t(i-2)) < t_min
                 dt = (t(i-1) - t(i-2));
             end
         end
+        dt
 
         % If pressure is non-physical back up with a smaller time step
-        if any(P(i-1,:) < 0) | any(pb_loss(i-1,:)<0) | any(isnan(P(i-1,:))) | any(abs(P(max(i-2,1),:)./P(i-1,:))>100)
+        if any(pb_loss(i-1,:)<0) %any(P(i-1,:) < 0) | any(pb_loss(i-1,:)<0) %| any(isnan(P(i-1,:))) | any(abs(P(max(i-2,1),:)./P(i-1,:))>100)
             'Low pressure'
-            i = i-2
-            if i>2
-                dt = 0.8*(t(i)-t(i-1))
-            else
+            i = i-3
+            if i<2
                 i = 2
-                dt = 0.8*(t(i)-t(i-1))
             end
+            dt = 0.65*(t(i)-t(i-1))
         end
 
         % If spatial discretization not strictly increasing back up with a
         % smaller time step
         if any((zz_t(i-1,2:end) - zz_t(i-1,1:end-1))<0)
             'Time step too large'
-            i = i-2
-            if i>2
-                dt = 0.8*(t(i)-t(i-1))
-            else
+            i = i-3
+            if i<2
                 i = 2
-                dt = 0.8*(t(i)-t(i-1))
             end
+            dt = 0.65*(t(i)-t(i-1))
         end
 
         % If solution failed to converge back up with a smaller time step
         if mm>5
             'Failed to converge'
-            i = i-2
-            if i>2
-                dt = 0.8*(t(i)-t(i-1))
-            else
+            i = i-3
+            if i<2
                 i = 2
-                dt = 0.8*(t(i)-t(i-1))
             end
+            dt = 0.65*(t(i)-t(i-1))
+
         end
 
         % Caluclate coefficients for BDF2 time stepping scheme
@@ -323,10 +319,10 @@ while t(max([1,i-1]))<tf && i<=nt
             end            
 
             % Interpolation between grids
-            phi_interp = griddedInterpolant((zz_p(i-1,:)),phi(i-1+n,:),'linear','nearest');
+            phi_interp = griddedInterpolant((zz_p(i-1,:)),phi(i-1+n,:),'pchip','nearest');
             phi_interp = phi_interp((zz_t(i-1,:)));
             phi_interp(phi_interp>0.999) = 0.999;
-            pb_interp = griddedInterpolant((zz_p(i-1,:)),pb_loss(i-1+n,:),'linear','nearest');
+            pb_interp = griddedInterpolant((zz_p(i-1,:)),pb_loss(i-1+n,:),'pchip','nearest');
             pb_interp = pb_interp((zz_t(i-1,:)));
 
             % Bulk density
@@ -367,7 +363,7 @@ while t(max([1,i-1]))<tf && i<=nt
             H2O_temp = squeeze(H2O(i-1,:,:));
             switch OutgasModel
                 case 'Diffusive'
-                    D = DiffFun([H2O(i-1,:,end),H2O(i-1,end,end)],[T(i,2:2:end),T(i,end)], [P(i-1,:),P_0], W);
+                    D = DiffFun([H2O(i-1,:,end),SolFun(BC_T(end),pp)],[T(i,2:2:end),T(i,end)], [P(i-1,:),P_0], W);
                     mean_H2O_diff = OutgasFun([H2O(i-1,:,end),SolFun(BC_T(end),pp)],[H2O(i-1,:,end),SolFun(BC_T(end),pp)],D,[zz_p(i-1,:),zz_u(i-1,end)],dt,dt,SolFun(BC_T(end),pp),'BDF1');
                     H2O_temp(:,end) = mean_H2O_diff(1:end-1);     
             end
@@ -376,7 +372,7 @@ while t(max([1,i-1]))<tf && i<=nt
             for j = 1:length(z_p)
 
                 % Skip nodes that can't grow
-                if (R(i-1,j)<=1.01e-6 && SolFun(T(i-1,2*j),pb_loss(i-1,j))>mean_H2O(i-1,2*j)) || T(i-1,2*j)<Tg
+                if (R(i-1,j)<=1.01e-6 && SolFun(T(i-1,2*j),pb_loss(i-1,j))>H2O(i-1,j,2)) || T(i-1,2*j)<Tg
                     Nb(i,j) = Nb(i-1,j);
                     R(i,j) = R(i-1,j);
                     phi(i,j) = phi(i-1,j);
@@ -384,8 +380,8 @@ while t(max([1,i-1]))<tf && i<=nt
 
                     switch OutgasModel
                         case 'Diffusive'
-                            D = DiffFun(H2O(i-1,j,:),T(i,j) + 0*xH2O(i,j,:), P(i-1,j) + 0*xH2O(i,j,:), W);
-                            H2O(i,j,:) = OutgasFun([squeeze(H2O(i-1,j,1:end-1))',SolFun(BC_T(end),pp)],[squeeze(H2O(i-1,j,1:end-1))',SolFun(BC_T(end),pp)],squeeze(D)',squeeze(xH2O(i-1,j,:))',dt,dt,SolFun(BC_T(end),pp),'BDF1');
+                            D = DiffFun([H2O(i-1,j,1:end-1) mean_H2O_diff(j)],T(i,j) + 0*xH2O(i,j,:), P(i-1,j) + 0*xH2O(i,j,:), W);
+                            H2O(i,j,:) = OutgasFun([squeeze(H2O(i-1,j,1:end-1))',mean_H2O_diff(j)],[squeeze(H2O(i-1,j,1:end-1))',mean_H2O_diff(j)],squeeze(D)',squeeze(xH2O(i-1,j,:))',dt,dt,mean_H2O_diff(j),'BDF1');
                     end
                     
                     xH2O(i,j,:) = xH2O(i-1,j,:);
@@ -467,20 +463,22 @@ while t(max([1,i-1]))<tf && i<=nt
             % estimate
             switch OutgasModel
                 case 'Diffusive'
-                    H2O_diff = griddedInterpolant([zz_p(i-1,:), zz_u(i-1,end)],[mean_H2O(i,2:2:end),SolFun(BC_T(end),pp)],'linear','nearest');
-                    mean_H2O(i,1:2:end) = H2O_diff([zz_u(i-1,1:end-1),(zz_p(i-1,end)+zz_u(i-1,end))/2]);
+                    H2O_diff = griddedInterpolant([zz_p(i-1,:), zz_u(i-1,end)],[mean_H2O(i,2:2:end),SolFun(BC_T(end),pp)],'pchip','nearest');
+                    H2O_edge = trapz(linspace(zz_p(i-1,end),zz_u(i-1,end),100).^3,H2O_diff(linspace(zz_p(i-1,end),zz_u(i-1,end),100)))./(zz_u(i-1,end).^3-zz_p(i-1,end).^3);
+                    mean_H2O(i,1:2:end) = H2O_diff(zz_u(i-1,1:end));
+                    mean_H2O(i,end) = H2O_edge;
                 case 'None'
-                    H2O_diff = griddedInterpolant((zz_p(i-1,:)),mean_H2O(i,2:2:end),'linear','nearest');
+                    H2O_diff = griddedInterpolant((zz_p(i-1,:)),mean_H2O(i,2:2:end),'pchip','nearest');
                     mean_H2O(i,1:2:end) = H2O_diff((zz_u(i-1,:)));
             end
             
             % Interpolate between grids
-            phi_interp = griddedInterpolant((zz_p(i-1,:)),phi(i,:),'linear','linear');
+            phi_interp = griddedInterpolant((zz_p(i-1,:)),phi(i,:),'pchip','nearest');
             phi_interp = phi_interp((zz_t(i-1,:)));
             phi_interp(phi_interp>0.999) = 0.999;
             phi_interp(phi_interp<phi_0) = phi_0; 
             pb(i,pb(i,:)<1) = 1;
-            pb_interp = griddedInterpolant((zz_p(i-1,:)),pb(i,:),'linear','linear');
+            pb_interp = griddedInterpolant((zz_p(i-1,:)),pb(i,:),'pchip','nearest');
             pb_interp = pb_interp((zz_t(i-1,:)));
             pb_interp(pb_interp<1) = 1;
             
@@ -524,7 +522,7 @@ while t(max([1,i-1]))<tf && i<=nt
 
             erri = norm(u(i,:) - ui)./max(((norm(u(i,:)) + norm(u(i-1,:)))/2),1e-12);
             u(i,:) = n*(1-w)*u(i,:) + ((1-n)*(1-w) + w)*ui;
-            u_interp = interp1(zz_u(i-1,:),u(i,:),zz_p(i-1,:),'linear');
+            u_interp = interp1(zz_u(i-1,:),u(i,:),zz_p(i-1,:),'pchip');
 
             % Calculate capillary number
             switch Geometry

@@ -127,7 +127,7 @@ switch PTtModel
 
     case 'Optical dilatometer'
         PTt_fun = @(P_0, P_f, dPdt, T_0, T_f, dTdt, t_quench, t)...
-            OpticalDilatometer_fun(P_0,P_f,dPdt,T_0,T_f,dTdt,t_quench, t);
+            OpticalDilatometer_fun(P_0,P_f,dPdt,T_0,T_f,dTdt,t_quench,t);
 
     case 'Jenny'
         PTt_fun = @(P_0, P_f, dPdt, T_0, T_f, dTdt, t_quench, t)...
@@ -167,7 +167,7 @@ H2Oeq = 0.039 + 0*T;
 function H2Oeq = Schunke_sol(T,P)
 P = P*1e-6;
 %H2Oeq =((276.8*sqrt(P)+71.15.*P-1.5223.*(P.^1.5))./T) + 0.0012439.*(P.^1.5);
-PCO2 = 100;
+PCO2 = 0;
 H2Oeq =((354.94.*sqrt(P)+9.623.*P-1.5223.*(P.^1.5))./T) + 0.0012439.*(P.^1.5) + PCO2.*(-1.084.*1E-4.*sqrt(P)-1.362.*1E-5.*P);
 
 %==========================================================================

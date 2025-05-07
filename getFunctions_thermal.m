@@ -7,8 +7,8 @@ switch Geometry
     case 'Cylindrical'
         ThermFun = @(T1,T2,rho,cp,k,z_t,dt1,dt2,BC,flux,timescheme)Cylindrical_temp(T1,T2,rho,cp,k,z_t,dt1,dt2,BC_type,BC,flux,timescheme);
    
-    case 'Cylindrical-2D'
-        ThermFun = @(T1,T2,rho,cp,k,z_t,r_t,dt1,dt2,BC,flux,timescheme)Cylindrical2D_temp(T1,T2,rho,cp,k,z_t,r_t,dt1,dt2,BC_type,BC,flux,timescheme);
+    case '2D Cylindrical'
+        ThermFun = @(T1,T2,rho,cp,k,z_t,dt1,dt2,BC,flux,timescheme)Cylindrical2D_temp(T1,T2,rho,cp,k,z_t,dt1,dt2,BC_type,BC,flux,timescheme);
 end
 
 switch CpModel
@@ -186,7 +186,17 @@ while (n<max_iter && norm(T-Ti)>tol) || n==1
     err = norm(T-Ti);
 end
 
-function [T] = Cylindrical2D_temp(T1,T2,rho,cp,k,z_T,r_T,dt1,dt2,BC_type,BC,flux,timescheme)
+function [T] = Cylindrical2D_temp(T1,T2,rho,cp,k,z_T,dt1,dt2,BC_type,BC,flux,timescheme)
+
+%L = max(z_T);
+%Kappa = max(k)/(max(rho)*max(cp));
+%Theta = max(T1);
+
+%k = k/Kappa;
+
+%Tau = L.^2./Kappa;
+%dt1  = dt1/Tau;
+%dt2 = dt2/Tau;
 
 Bt = (dt1 + dt2)/dt1/dt2;
 Dt = dt1/dt2/(dt1+dt2);
@@ -195,56 +205,26 @@ Ft = (dt2+2*dt1)/dt1/(dt2+dt1);
 n = 1;
 tol = 1e-5;
 max_iter = 10;
-T = T1;
-Ti = T1;
+T = T1;%/Theta;
+Ti = T1;%/Theta;
+BC_T = BC;%/Theta;
+
+n_magma = sqrt(length(z_T)/2);
+
+zr = z_T(1:n_magma^2);%/L; 
+zz = z_T(n_magma^2+1:end);%/L;
+
+[ddr,ddz,d2dr,d2dz] = Derivs2D(z_T,n_magma,n_magma);
+
+dkdr = (ddr*k')';
+dkdz = (ddz*k')';
+
 
 while (n<max_iter && norm(T-Ti)>tol) || n==1
- 
-    [h1,h2,A,B,C,D,E,F] = FDcoeff(r_T);
-    dTdr = diag(-D(2:end),-1) + diag(-E) + diag(C(1:end-1),1);
-    dTdr(1,1:3) = [-A(1), B(1), -C(1)];
-    dTdr(end,end-2:end) = [D(end), -B(end), F(end)];
-    
-    dkdr = [-A(1)*k(1) + B(1)*k(2) - C(1)*k(3), ...
-            -D(2:end-1).*k(1:end-2) - E(2:end-1).*k(2:end-1) + C(2:end-1).*k(3:end), ...
-            D(end).*k(end-2) - B(end).*k(end-1) + F(end).*k(end)];
-    
-    d2Tdr2 = diag(2*h2(2:end)./(h1(2:end).*h2(2:end).*(h1(2:end)+h2(2:end))),-1) +...
-        diag(-2*(h1+h2)./(h1.*h2.*(h1+h2))) + ...
-        diag(2*h1(1:end-1)./(h1(1:end-1).*h2(1:end-1).*(h1(1:end-1)+h2(1:end-1))),1);
-    d2Tdr2(1,1:4) = [2*(3*h1(1) + 2*h2(1) + h2(3))./h1(1)./(h1(1) + h2(1))./(h1(1)+h2(1)+h2(3)), ...
-                 -2*(2*h1(1) + 2*h2(1) + h2(3))./h1(1)./h2(1)./(h2(1) + h2(3)),...
-                 2*(2*h1(1) + h2(1) + h2(3))./(h1(1) + h2(1))./h2(1)./h2(3),...
-                 -2*(2*h1(1) + h2(1))./(h1(1) + h2(1) + h2(3))./(h2(1) + h2(3))./h2(3)];
-    d2Tdr2(end,end-3:end) = [-2*(h2(end-2) + 2*h2(end))./h1(end-2)./(h1(end-2)+h2(end-2))./(h1(end-2) + h2(end-2) + h2(end)),...
-                         2*(h1(end-2) + h2(end-2) + 2*h2(end))./h1(end-2)./h2(end-2)./(h2(end-2)+h2(end)),...
-                         -2*(h1(end-2) + 2*h2(end-2) + 2*h2(end))./(h1(end-2)+h2(end-2))./h2(end-2)./h2(end),...
-                         2*(h1(end-2) + 2*h2(end-2) + 3*h2(end))./(h1(end-2) + h2(end-2) + h2(end))./(h2(end-2) + h2(end))./h2(end)];
 
-    [h1,h2,A,B,C,D,E,F] = FDcoeff(z_T);
-    dTdz = diag(-D(2:end),-1) + diag(-E) + diag(C(1:end-1),1);
-    dTdz(1,1:3) = [-A(1), B(1), -C(1)];
-    dTdz(end,end-2:end) = [D(end), -B(end), F(end)];
+    % assemble pde
     
-    dkdz = [-A(1)*k(1) + B(1)*k(2) - C(1)*k(3), ...
-            -D(2:end-1).*k(1:end-2) - E(2:end-1).*k(2:end-1) + C(2:end-1).*k(3:end), ...
-            D(end).*k(end-2) - B(end).*k(end-1) + F(end).*k(end)];
-    
-    d2Tdz2 = diag(2*h2(2:end)./(h1(2:end).*h2(2:end).*(h1(2:end)+h2(2:end))),-1) +...
-        diag(-2*(h1+h2)./(h1.*h2.*(h1+h2))) + ...
-        diag(2*h1(1:end-1)./(h1(1:end-1).*h2(1:end-1).*(h1(1:end-1)+h2(1:end-1))),1);
-    d2Tdz2(1,1:4) = [2*(3*h1(1) + 2*h2(1) + h2(3))./h1(1)./(h1(1) + h2(1))./(h1(1)+h2(1)+h2(3)), ...
-                 -2*(2*h1(1) + 2*h2(1) + h2(3))./h1(1)./h2(1)./(h2(1) + h2(3)),...
-                 2*(2*h1(1) + h2(1) + h2(3))./(h1(1) + h2(1))./h2(1)./h2(3),...
-                 -2*(2*h1(1) + h2(1))./(h1(1) + h2(1) + h2(3))./(h2(1) + h2(3))./h2(3)];
-    d2Tdz2(end,end-3:end) = [-2*(h2(end-2) + 2*h2(end))./h1(end-2)./(h1(end-2)+h2(end-2))./(h1(end-2) + h2(end-2) + h2(end)),...
-                         2*(h1(end-2) + h2(end-2) + 2*h2(end))./h1(end-2)./h2(end-2)./(h2(end-2)+h2(end)),...
-                         -2*(h1(end-2) + 2*h2(end-2) + 2*h2(end))./(h1(end-2)+h2(end-2))./h2(end-2)./h2(end),...
-                         2*(h1(end-2) + 2*h2(end-2) + 3*h2(end))./(h1(end-2) + h2(end-2) + h2(end))./(h2(end-2) + h2(end))./h2(end)];
-
-
-    
-    TT = (1./rho./cp)'.*(dkdz'.*dTdz + k'.*d2Tdz2);
+    TT = (1./rho./cp)'.*(min(1./zr',1e-6).*k'.*ddr + dkdr'.*ddr + dkdz'.*ddz + k'.*d2dr + k'.*d2dz);
     TR = (1./rho./cp)'.*flux;
     
     switch timescheme
@@ -261,31 +241,56 @@ while (n<max_iter && norm(T-Ti)>tol) || n==1
             b = 0*T1';
     end
     
-    % Applied temperature at top
+    % Applied temperature at outer edge
     switch BC_type
         case 'Dirichlet'
     
-        M(end,:) = 0;
-        M(end,end) = 1;
-        b(end) = BC;
+        M(n_magma:n_magma:end,:) = 0;
+        I = zeros(1,n_magma^2); I(n_magma:n_magma:end) = 1;
+        M(logical(diag(I))) = 1;
+        b(logical(I)) = BC_T;
     
         case 'Forced'
-        M(end,:) = 0;
-        M(end,end-2:end) = k(end).*[D(end), -B(end), F(end)] + [0,0,BC(1) + 0*5.67e-8.*Ti(end).^3];
-        b(end) = BC(1).*BC(2) + 0*5.67e-8.*BC(2).^4;
+        TT_BC = (k'.*ddr);
+        M(n_magma:n_magma:end,:) = TT_BC(n_magma:n_magma:end,:);
+        M(logical(diag(I))) =  M(logical(diag(I))) + BC(1) + 0*5.67e-8.*Ti(logical(diag(I))).^3;
+        b(logical(I)) = BC(1).*BC(2) + 0*5.67e-8.*BC(2).^4;
+
+        case 'SLS'
+        M(n_magma:n_magma:end,:) = ddr(n_magma:n_magma:end,:);
+        b(n_magma:n_magma:end) = 0;
+
+        I = zeros(1,n_magma^2);
+        I(n_magma:n_magma:end) = 1;
+        J = zeros(1,n_magma^2);
+        J((zz>=0.006) & (zz<=0.007) & I) = 1;
+        M(logical(J),:) = 0;
+        M(logical(diag(J))) = 1;
+        b(logical(J)) = BC_T;
     
     end
     
     % No flux at bottom
-    M(1,:) = 0;
-    M(1,1:3) = [-A(1), B(1), -C(1)];
-    b(1) = 0;
+
+    M(1:n_magma,:) = ddz(1:n_magma,:);
+    b(1:n_magma) = 0;
+
+    % No flux at top
+
+    M(end-n_magma+1:end,:) = ddz(end-n_magma+1:end,:);
+    b(end-n_magma+1:end) = 0;
+
+    % No flux at center
+
+    M(1:n_magma:end,:) = ddr(1:n_magma:end,:);
+    b(1:n_magma:end) = 0;
     
     Ti = T;
     T = (M\b)';
     
     n = n+1;
     err = norm(T-Ti);
+    %T = T*Theta;
 
 end
 
