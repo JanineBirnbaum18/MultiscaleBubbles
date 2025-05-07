@@ -380,8 +380,8 @@ while t(max([1,i-1]))<tf && i<=nt
 
                     switch OutgasModel
                         case 'Diffusive'
-                            D = DiffFun([H2O(i-1,j,1:end-1) mean_H2O_diff(j)],T(i,j) + 0*xH2O(i,j,:), P(i-1,j) + 0*xH2O(i,j,:), W);
-                            H2O(i,j,:) = OutgasFun([squeeze(H2O(i-1,j,1:end-1))',mean_H2O_diff(j)],[squeeze(H2O(i-1,j,1:end-1))',mean_H2O_diff(j)],squeeze(D)',squeeze(xH2O(i-1,j,:))',dt,dt,mean_H2O_diff(j),'BDF1');
+                            D = DiffFun([squeeze(H2O(i-1,j,1:end-1))' mean_H2O_diff(j)],T(i,j) + 0*squeeze(xH2O(i,j,:))', P(i-1,j) + 0*squeeze(xH2O(i,j,:))', W);
+                            H2O(i,j,:) = OutgasFun([squeeze(H2O(i-1,j,1:end-1))',mean_H2O_diff(j)],[squeeze(H2O(i-1,j,1:end-1))',mean_H2O_diff(j)],D,squeeze(xH2O(i-1,j,:))',dt,dt,mean_H2O_diff(j),'BDF1');
                     end
                     
                     xH2O(i,j,:) = xH2O(i-1,j,:);

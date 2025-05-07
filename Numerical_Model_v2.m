@@ -76,7 +76,7 @@ switch OutgasModel
     case 'Diffusive'
         nx = length(x);
         x = [x;2*x(end) - flipud(x(1:end-1))]; % extend domain for mass conservation
-        H2Ot_0 = [H2Ot_0; (2*1.005*H2Ot_0(end)-1.01*flipud(H2Ot_0(1:end-1)))]; % choose initial water to be nearly symmetric to maintain BC
+        H2Ot_0 = [H2Ot_0; (2*1.01*H2Ot_0(end)-1.02*flipud(H2Ot_0(1:end-1)))]; % choose initial water to be nearly symmetric to maintain BC
         H2Ot_0(floor(nx*3/2):end) = H2Ot_0(floor(nx*3/2)); % Force end to be flat to prevent water loss
         Y_0 = [H2Ot_0; R_0];
 end
