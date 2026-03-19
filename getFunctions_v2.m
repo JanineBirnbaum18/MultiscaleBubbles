@@ -115,7 +115,7 @@ switch PTtModel
 
     case 'Evolving'
         PTt_fun = @(P_0, P_f, dPdt, T_0, T_f, dTdt, t_quench, t)...
-            Evolving_fun(P_0,dPdt,T_0,dTdt,t);
+            Evolving_fun(P_0,P_f,dPdt,T_0,dTdt,t);
 
     case 'Quench'
         PTt_fun = @(P_0, P_f, dPdt, T_0, T_f, dTdt, t_quench, t)...
@@ -167,7 +167,7 @@ H2Oeq = 0.039 + 0*T;
 function H2Oeq = Schunke_sol(T,P)
 P = P*1e-6;
 %H2Oeq =((276.8*sqrt(P)+71.15.*P-1.5223.*(P.^1.5))./T) + 0.0012439.*(P.^1.5);
-PCO2 = 0;
+PCO2 = 10;
 H2Oeq =((354.94.*sqrt(P)+9.623.*P-1.5223.*(P.^1.5))./T) + 0.0012439.*(P.^1.5) + PCO2.*(-1.084.*1E-4.*sqrt(P)-1.362.*1E-5.*P);
 
 %==========================================================================
@@ -318,8 +318,9 @@ T = ((t<=P_t_Press).*T_0) + ...
     +((t>P_t_Press+T_t_Quench).*T_f);
 out = [P, T];
 
-function out = Evolving_fun(P_0,dPdt,T_0,dTdt,t)
+function out = Evolving_fun(P_0,P_f,dPdt,T_0,dTdt,t)
 P = P_0 + t.*dPdt;% + t.*dPdt;
+P(t>(P_f-P_0)/dPdt) = P_f;
 T = T_0 + t.*dTdt;% + t.*dTdt;
 out = [P,T];
 

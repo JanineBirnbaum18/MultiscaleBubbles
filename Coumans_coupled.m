@@ -63,7 +63,7 @@ switch Geometry
         z_t = z_int0*(1-logspace(0,-0.8,2*n_magma+1))*(1/(1-10^-0.8)); 
         z_u = z_t(1:2:end);
         z_p = z_t(2:2:end);
-        g = 0;%9.81;
+        g = 9.81;
 end
 
 % Intialize variables
@@ -100,7 +100,7 @@ dudr = zeros(size(tt_p));
 u_t = 0*z_t;
 
 W = Mass_SingleOxygen(Composition);
-pp = 0.2*101.3e3; %2.3e3; % Partial pressure of water in surroundings
+pp = 0.1*101.3e3; %2.3e3; % Partial pressure of water in surroundings
 
 % Model tolerances
 erri = 5e-4;
@@ -156,7 +156,7 @@ while t(max([1,i-1]))<tf && i<=nt
             rho(i,:) = melt_rho * (1-phi_interp)  + density(P_0+(2.*(SurfTens)./R_0),T_0,coefficients())*phi_interp;
         end
         
-        dz = [(zz_p(1,2:end)-zz_p(1,1:end-1)),zz_p(1,end)-zz_p(1,end-1)];
+        dz = [(zz_p(1,2:end)-zz_p(1,1:end-1)),zz_u(1,end)-zz_u(1,end-1)];
 
         % set initial pressure
         switch Geometry
@@ -167,11 +167,11 @@ while t(max([1,i-1]))<tf && i<=nt
 
                 switch Buoyancy
                     case 'True'
-                        P(i,:) = cumsum(rho(i,2:2:end).*dz*g,'reverse')-rho(i,end).*dz(end)/2*g + P_0;
-                        Plith = cumsum(rock_rho(i,2:2:end).*dz*g,'reverse')-rock_rho(i,end).*dz(end)/2*g + P_0;
+                        P(i,:) = cumsum(rho(i,2:2:end).*dz*g,'reverse')*g + P_0;
+                        Plith = cumsum(rock_rho.*dz*g,'reverse')*g + P_0;
                     case 'False'
-                        P(i,:) = cumsum(rho(i,2:2:end).*dz*g,'reverse')-rho(i,end).*dz(end)/2*g + P_0;
-                        Plith = cumsum(rho(i,2:2:end).*dz*g,'reverse')-rho(i,end).*dz(end)/2*g + P_0;
+                        P(i,:) = cumsum(rho(i,2:2:end).*dz*g,'reverse')*g + P_0;
+                        Plith = cumsum(rho(i,2:2:end).*dz*g,'reverse')*g + P_0;
                 end
         end
 
@@ -406,7 +406,7 @@ while t(max([1,i-1]))<tf && i<=nt
                                     (2*h2/(h1*h2*(h1+h2))*P(i-3,j)-2*(h1+h2)./(h1.*h2.*(h1+h2))*P(i-2,j) + ...
                                     2*h1/(h1*h2*(h1+h2))*P(i-1,j))*dt/2;
                             else
-                                dPdti = 0; % Start from rest
+                                dPdti = dPdt*dt; % Start from rest
                             end
                             Pf = max(1e-3,P(i-1,j) + dPdti*dt);
                         else % Otherwise use most recent guess
@@ -415,12 +415,12 @@ while t(max([1,i-1]))<tf && i<=nt
                         end
                     else % Bootstrap in with a diffusion-based projection
                         if n == 0
-                            H2O_forecast = (SolFun(T_0,P_0)-H2Ot_0).*erfc(xH2O(1,:,:)./(2*sqrt(0.1*DiffFun(H2Ot_0,T_0,P_0,W)*(t(i))))) + H2Ot_0;
+                            H2O_forecast = (SolFun(PT(2),PT(1))-H2Ot_0).*erfc(xH2O(1,:,:)./(2*sqrt(0.1*DiffFun(H2Ot_0,PT(2),PT(1),W)*(t(i))))) + H2Ot_0;
                             I1=trapz(squeeze(xH2O(1,j,:)),squeeze((1/100)*H2O(1,j,:)).*squeeze(xH2O(1,j,:).^2),1);
                             I2=trapz(squeeze(xH2O(1,j,:)),squeeze((1/100)*H2O_forecast(1,j,:)).*squeeze(xH2O(1,j,:).^2),1);            
                             m_forecast=m_loss(1,j)+4.*pi.*melt_rho.*(I1-I2);
 
-                            Pf = w*pb_fun(m_forecast,T_0,R_0) + (1-w)*P_0;
+                            Pf = w/2*pb_fun(m_forecast,PT(2),R_0) + (1-w/2)*PT(1) + dPdt*dt;
                             dPdti = (Pf - P(i-1,j))./dt;
                         else
                             dPdti = (P(i,j) - P(i-1,j))./dt;
@@ -444,7 +444,8 @@ while t(max([1,i-1]))<tf && i<=nt
                         Nb(i-1,j), 0, dt, T(i-1,j), T(i,j), dTdti,...
                         P(i-1,j), Pf,...
                         dPdti, 1e10, Numerical_Tolerance,...
-                        eta(i-1+n,:), zz_p(i-1,:), j, Geometry, radius);
+                        etar, ... %eta(i-1+n,:), 
+                        zz_p(i-1,:), j, Geometry, radius);
 
                     % Update solution with SOR
 
@@ -464,7 +465,8 @@ while t(max([1,i-1]))<tf && i<=nt
             switch OutgasModel
                 case 'Diffusive'
                     H2O_diff = griddedInterpolant([zz_p(i-1,:), zz_u(i-1,end)],[mean_H2O(i,2:2:end),SolFun(BC_T(end),pp)],'pchip','nearest');
-                    H2O_edge = trapz(linspace(zz_p(i-1,end),zz_u(i-1,end),100).^3,H2O_diff(linspace(zz_p(i-1,end),zz_u(i-1,end),100)))./(zz_u(i-1,end).^3-zz_p(i-1,end).^3);
+                    H2O_diff_edge = griddedInterpolant([zz_p(i-1,:), zz_u(i-1,end)],[squeeze(H2O(i,:,end)),SolFun(BC_T(end),pp)],'pchip','nearest');
+                    H2O_edge = trapz(linspace(zz_p(i-1,end),zz_u(i-1,end),100).^3,H2O_diff_edge(linspace(zz_p(i-1,end),zz_u(i-1,end),100)))./(zz_u(i-1,end).^3-zz_p(i-1,end).^3);
                     mean_H2O(i,1:2:end) = H2O_diff(zz_u(i-1,1:end));
                     mean_H2O(i,end) = H2O_edge;
                 case 'None'
@@ -506,23 +508,23 @@ while t(max([1,i-1]))<tf && i<=nt
 
             % Viscous flow
             if i == 2 
-                [Pi, ui] = DynFun(P(i-1,:)-mean(Plith),u(i-1,:), ...
-                    P(i-1,:)-mean(Plith),u(i-1,:),Plith-mean(Plith), ...
+                [Pi, ui] = DynFun(P(i-1,:)-PT(1),u(i-1,:), ...
+                    P(i-1,:)-PT(1),u(i-1,:),Plith-PT(1), ...
                     rho(i,:),drhodt(i,:),phi(i,:),R(i,:),SurfTens,melt_visc(i,:).*etar, ...
-                    beta(i,:),dbetadt(i,:),radius,g,zz_p(i-1,:),zz_u(i-1,:),dt,dt,'BDF1');
+                    beta(i,:),dbetadt(i,:),radius,g,zz_p(i-1,:),zz_u(i-1,:),zz_t(i-1,:),dt,dt,'BDF1');
             else
-                [Pi, ui] = DynFun(P(i-1,:)-mean(Plith),u(i-1,:), ...
-                    P(i-2,:)-mean(Plith),u(i-2,:),Plith-mean(Plith), ...
+                [Pi, ui] = DynFun(P(i-1,:)-PT(1),u(i-1,:), ...
+                    P(i-2,:)-PT(1),u(i-2,:),Plith-PT(1), ...
                     rho(i,:),drhodt(i,:),phi(i,:),R(i,:),SurfTens,melt_visc(i,:).*etar, ...
-                    beta(i,:),dbetadt(i,:),radius,g,zz_p(i-1,:),zz_u(i-1,:),dt,t(i-1)-t(i-2),'BDF2');
+                    beta(i,:),dbetadt(i,:),radius,g,zz_p(i-1,:),zz_u(i-1,:),zz_t(i-1,:),dt,t(i-1)-t(i-2),'BDF2');
             end
 
-            P_err(m+1,:) = P(i,j) - (Pi + mean(Plith));
-            P(i,:) = n*(1-w)*P(i,:) + ((1-n)*(1-w) + w)*(Pi + mean(Plith));
+            P_err(m+1,:) = P(i,j) - (Pi + PT(1));
+            P(i,:) = n*(1-w)*P(i,:) + ((1-n)*(1-w) + w)*(Pi + PT(1));
 
             erri = norm(u(i,:) - ui)./max(((norm(u(i,:)) + norm(u(i-1,:)))/2),1e-12);
             u(i,:) = n*(1-w)*u(i,:) + ((1-n)*(1-w) + w)*ui;
-            u_interp = interp1(zz_u(i-1,:),u(i,:),zz_p(i-1,:),'pchip');
+            u_interp = interp1(zz_u(i-1,:),u(i,:),zz_p(i-1,:),'linear');
 
             % Calculate capillary number
             switch Geometry
@@ -598,6 +600,19 @@ while t(max([1,i-1]))<tf && i<=nt
                     radius = zz_t(i-1,end);
             end
 
+            dz = [(zz_p(1,2:end)-zz_p(1,1:end-1)),zz_u(1,end)-zz_p(1,end)];
+
+            % set initial pressure
+            switch Geometry
+                case 'Cylindrical'
+                    switch Buoyancy
+                        case 'True'
+                             Plith = cumsum(rock_rho.*dz*g,'reverse')*g + PT(1);
+                        case 'False'
+                             Plith = cumsum(rho(i,2:2:end).*dz*g,'reverse')*g + PT(1);
+                    end
+            end
+
             % Plot results
             figure(8);
             if m == 0
@@ -650,7 +665,7 @@ while t(max([1,i-1]))<tf && i<=nt
     figure(3)
     
     if rem(i-1,round((nt-1)/10))==0
-        ys = {P-P_0,u,mean_H2O,phi,T-273.15};
+        ys = {P,u,mean_H2O,phi,T-273.15};
         xs = {zz_p,zz_u,zz_t,zz_p,zz_t};
         switch Geometry
             case 'Radial'

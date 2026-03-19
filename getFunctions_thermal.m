@@ -309,7 +309,7 @@ F = (h1 + 2*h2)./h2./(h1+h2);
 % thermal material properties
 function [cpmelt] = Stebbins(Composition,T,wtH2O)
 
-Composition = Composition'./(sum(Composition) + wtH2O/100);
+Composition = Composition'./(sum(Composition) + wtH2O);
 Composition(11,:) = wtH2O'/100;
 
 %Molar mass (g/mol) of individual elements
@@ -356,7 +356,7 @@ c = 1e5*[-28.003, 4.470, -21.465, -7.6986, 0, 1.7549, -1.9322, 2.9101, -28.929, 
 Cpanhyd = sum(a.*Xanhyd,1) + sum(b.*Xanhyd,1).*T + sum(c.*Xanhyd,1).*(T.^(-2));
 
 M = sum(Xhyd./sum(Xhyd,1).*OxideMolarMass,1);
-cpmelt = (XH2O.*(237) + (1-XH2O).*Cpanhyd).*M;
+cpmelt = (XH2O.*(237) + (1-XH2O).*Cpanhyd)./M*1000;
 
 function [cpfoam] = BagdassarovDingwell1994Cp(phi,cpmelt,rhomelt,T,P)
 cpgas = (-6e-08.*T.^2 + 0.0008.*T + 1.558)*1000;
