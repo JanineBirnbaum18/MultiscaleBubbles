@@ -6,7 +6,7 @@ warning('off','MATLAB:nearlySingularMatrix')
 %Melt composition
 %[SiO2 TiO2 Al2O3 FeO(T) MnO MgO CaO Na2O K2O P2O5 H2O F2O-1]
 Composition = [75.17 0.22 12.02 3.13 0.11 0.09 1.66 4.58 2.88 0 0 0];
-H2Ot_0 = 0.115; %initial water concentration (wt. %)
+H2Ot_0 = 0.108; %initial water concentration (wt. %)
 %Dynamics geometry
 Geometry = 'Radial'; 
 BC = 'Symmetry';
@@ -15,7 +15,7 @@ BC_T = 1006+273.15;
 flux = 0;
 
 %Material properties
-SolModel = 'Schunke';
+SolModel = 'Liu 2005';
 DiffModel = 'Zhang 2010 Metaluminous';
 ViscModel = 'Hess and Dingwell 1996';
 
@@ -31,14 +31,14 @@ PermModel = 'None';
 OutgasModel = 'Diffusive';
 
 %Constants used for calculations
-SurfTens = 0.08; %Value for surface tension (N/m) Shea 2017: 0.079
+SurfTens = 0.22; %Value for surface tension (N/m) Shea 2017: 0.079
 melt_rho = 2400; %Melt density in kg/m^3
 rock_rho = 2400; %Country rock density in kg/m^3
 env_rho = 1; %Surrounding air or water density in kg/m^3
 melt_beta = 2.6e-11; % Malfait et al. (2011)
 
 %Spatial parameters
-Nb_0 = 5e10; %Bubble number density (number per m^3)
+Nb_0 = 4e10; %Bubble number density (number per m^3)
 R_0 = 1e-5; %R_0 (m) set independently
 phi_0 = (4/3).*pi()*R_0.^3./(1/Nb_0);
 
@@ -46,22 +46,23 @@ phi_0 = (4/3).*pi()*R_0.^3./(1/Nb_0);
 P_0 = 101e3; % Initial surface pressure
 P_f = 101e3; % Final surface pressure
 dPdt = 1e-10;
-T_0 = 806 + 273.15; %Initial temperature in K
+T_0 = 706 + 273.15; %Initial temperature in K
 T_f = 1006 + 273.15;
 PTtModel = 'Jenny';
 Buoyancy = 'False';
 dTdt = [10/60 -10/60];
 t_quench = 10*60*60+30*60;
-tf = 1e5;
+tf = 10*60*60+2*30*60;
 solve_T = true;
 
 % Discretization
-nt = 200;
+nt = 1000;
 n_magma = 10;
-t_min = 20;
+t_min = 10;
 t_max = 600;
 
-radii = [0.5, 3, 6]*1e-3;
+radii = [0.5, 1.5, 3, 6]*1e-3;
+colors = [51,34,136; 67,171,154; 223,207,129;136,34,84]/255;
 
 for i = 1:length(radii)
     radius = radii(i);
@@ -76,7 +77,7 @@ for i = 1:length(radii)
     solve_T, t_min, t_max, nt, n_magma);
 
     figure(9); hold on; 
-    plot(t+78*60,sum((zz_u(:,2:end).^3 - zz_u(:,1:end-1).^3).*phi,2)./(zz_u(:,end)).^3,'DisplayName','R = ' + string(radius*1e3) + ' mm');
+    plot(t+68.6*60,sum((zz_u(:,2:end).^3 - zz_u(:,1:end-1).^3).*phi,2)./(zz_u(:,end)).^3,'DisplayName','R = ' + string(radius*1e3) + ' mm','LineWidth',2,'Color',colors(i,:));
 end
 set(gca,'XScale','log')
 xlim([1e3,2e5])
