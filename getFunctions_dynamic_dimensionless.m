@@ -915,7 +915,7 @@ function [P,u] = Spherical_pde(P1,u1,P2,u2,P0,rho,drhodt,...
 Mu = max(eta);
 L = max(z_u);
 Rho = max(rho);
-U = max(1e-12,max(u1));
+U = max(1e-8,max(u1));
 Re = U*L*Rho/Mu;
 
 P1 = P1*(L/Mu/U);
@@ -1094,26 +1094,25 @@ M(length(P)+1,length(P)+1) = 1;
 b(length(P)+1) = 0;
 
 % Pressure at surface
-M(end,:) = 0;
-
-%UP_end = 0*z_p;
-%UP_end(end) = -1./rho_interp(end)./(z_u(end)-z_p(end));
-%UR_end = 0*P0';
-%UR_end = UR_end(end) + (1./rho_interp(end)).*(1./(z_u(end)-z_p(end)).*P0(end));
-%UU_end = 0*z_u;
-%UU_end(end-3:end) = 1./rho_interp(end)*4/3*[(z_u(end-2)./z_u(end)).^2.*D(end).*etar(end-2).*(-D(end-2)),...
-%    (z_u(end-2)./z_u(end)).^2.*D(end)*etar(end-2).*(-E(end-2)-1./z_u(end-2)) + (z_u(end-1)./z_u(end)).^2.*(-B(end))*etar(end-1).*(-D(end-1)) + etar(end).*D(end),...
-%    (z_u(end-2)./z_u(end)).^2.*D(end)*etar(end-2).*(C(end-2)) + (z_u(end-1)./z_u(end)).^2.*(-B(end))*etar(end-1).*(-E(end-1)-1./z_u(end-1)) + etar(end).*(-B(end)),...
-%    (z_u(end-1)./z_u(end)).^2.*(-B(end))*etar(end-1).*C(end-1) + etar(end).*(F(end) - 1./z_u(end))];
+%M(end,:) = 0;
 
 UP_end = 0*z_p;
 UP_end(end) = -1./rho_interp(end)./(z_u(end)-z_p(end));
-UR_end = 0; %P0(end)./rho_interp(end)./(z_u(end)-z_p(end));
+UR_end = 0*P0';
+UR_end = UR_end(end) + (1./rho_interp(end)).*(1./(z_u(end)-z_p(end)).*P0(end));
 UU_end = 0*z_u;
-eye0 = diag(ones(length(u)-1));
-UU_end = 1./rho_interp(end).*(4/3.*(D(end)*etar(end-4)*dudz(end-2,:) + ...
-    -B(end)*etar(end-2)*dudz(end-1,:) + ...
-    -4*etar(end)/R^2*eye0(end,:)));
+UU_end(end-3:end) = 1./rho_interp(end)*4/3*[(z_u(end-2)./z_u(end)).^2.*D(end).*etar(end-2).*(-D(end-2)),...
+   (z_u(end-2)./z_u(end)).^2.*D(end)*etar(end-2).*(-E(end-2)-1./z_u(end-2)) + (z_u(end-1)./z_u(end)).^2.*(-B(end))*etar(end-1).*(-D(end-1)) + etar(end).*D(end),...
+   (z_u(end-2)./z_u(end)).^2.*D(end)*etar(end-2).*(C(end-2)) + (z_u(end-1)./z_u(end)).^2.*(-B(end))*etar(end-1).*(-E(end-1)-1./z_u(end-1)) + etar(end).*(-B(end)),...
+   (z_u(end-1)./z_u(end)).^2.*(-B(end))*etar(end-1).*C(end-1) + etar(end).*(F(end) - 1./z_u(end))];
+
+% UP_end = 0*z_p;
+% UP_end(end) = -1./rho_interp(end)./(z_u(end)-z_p(end));
+% UR_end = 0; %P0(end)./rho_interp(end)./(z_u(end)-z_p(end));
+% eye0 = diag(ones(length(u)-1));
+% UU_end = 1./rho_interp(end).*(4/3.*(D(end)*etar(end-4)*dudz(end-2,:) + ...
+%     -B(end)*etar(end-2)*dudz(end-1,:) + ...
+%     -4*etar(end)/R^2*eye0(end,:)));
 
 switch timescheme
     case 'BDF1'
