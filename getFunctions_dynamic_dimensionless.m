@@ -1035,9 +1035,9 @@ PU = (-1./rho(2:2:end).*drhodz.*(1./beta + 1/2*P-P0))'.*u_interp + ...
     (-(1./beta + 1/2*P-P0))'.*dudz_P + ...
     (-1./z_p.*(1./beta + 1/2*P-P0))'.*u_interp;
 
-dudr = dudz*u' + 2./z_u'.*u'; 
-dudr1 = dudz*u1' + 2./z_u'.*u1';
-dudr2 = dudz*u2' + 2./z_u'.*u2';
+dudr = 0*(dudz*u' + 2./z_u'.*u'); 
+dudr1 = 0*(dudz*u1' + 2./z_u'.*u1');
+dudr2 = 0*(dudz*u2' + 2./z_u'.*u2');
 
 switch timescheme
     case 'BDF1'
@@ -1049,7 +1049,7 @@ switch timescheme
             d2udrdt = Ft.*dudr - Bt.*dudr1 + Dt.*dudr2;
         end
     case 'Steady'
-        d2udrdt = 0;
+        d2udrdt = 0*dudr;
 end
 
 dudr_interp = griddedInterpolant(z_u,dudr,'linear','nearest');
@@ -1137,6 +1137,10 @@ u = V(length(P)+1:end)';
 
 n = n+1;
 
+end
+
+if ~isreal(P)
+    'STOP'
 end
 
 P = P/(L/Mu/U);

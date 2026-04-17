@@ -365,7 +365,7 @@ while t(max([1,i-1]))<tf && i<=nt
                 case 'Diffusive'
                     D = DiffFun([H2O(i-1,:,end),SolFun(BC_T(end),pp)],[T(i,2:2:end),T(i,end)], [P(i-1,:),P_0], W);
                     mean_H2O_diff = OutgasFun([H2O(i-1,:,end),SolFun(BC_T(end),pp)],[H2O(i-1,:,end),SolFun(BC_T(end),pp)],D,[zz_p(i-1,:),zz_u(i-1,end)],dt,dt,SolFun(BC_T(end),pp),'BDF1');
-                    H2O_temp(:,end) = mean_H2O_diff(1:end-1);     
+                    H2O_temp(:,end) = mean_H2O_diff(1:end-1);
             end
 
             % Run Coumans 2020 for each pressure node
@@ -415,7 +415,7 @@ while t(max([1,i-1]))<tf && i<=nt
                         end
                     else % Bootstrap in with a diffusion-based projection
                         if n == 0
-                            H2O_forecast = (SolFun(PT(2),PT(1))-H2Ot_0).*erfc(xH2O(1,:,:)./(2*sqrt(0.1*DiffFun(H2Ot_0,PT(2),PT(1),W)*(t(i))))) + H2Ot_0;
+                            H2O_forecast = (SolFun(PT(2),PT(1))-H2Ot_0).*erfc((xH2O(1,:,:)-xH2O(1,:,1))./(2*sqrt(0.1*DiffFun(H2Ot_0,PT(2),PT(1),W)*(t(i))))) + H2Ot_0;
                             I1=trapz(squeeze(xH2O(1,j,:)),squeeze((1/100)*H2O(1,j,:)).*squeeze(xH2O(1,j,:).^2),1);
                             I2=trapz(squeeze(xH2O(1,j,:)),squeeze((1/100)*H2O_forecast(1,j,:)).*squeeze(xH2O(1,j,:).^2),1);            
                             m_forecast=m_loss(1,j)+4.*pi.*melt_rho.*(I1-I2);
@@ -457,6 +457,7 @@ while t(max([1,i-1]))<tf && i<=nt
                     mean_H2O(i,2*j) = trapz(squeeze(xH2O(i,j,:)).^3,squeeze(H2O(i,j,:)))./(xH2O(i,j,end).^3-xH2O(i,j,1).^3);
                     pb(i,j) = ((1-w)*(1-n) + w)*pbi(end) + n*(1-w)*pb(i,j);
                     m_bub(i,j) = ((1-w)*(1-n) + w)*mi(end) + n*(1-w)*m_bub(i,j);
+
                 end
             end
 
