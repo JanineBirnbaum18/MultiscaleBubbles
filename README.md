@@ -1,7 +1,7 @@
-#Multiscale Vesiculation, Fluid flow, Failure, and Interaction Nonlinear model (MVFFIN)
+# Multiscale Vesiculation, Fluid flow, Failure, and Interaction Nonlinear model (MVFFIN)
 Simulate bubble growth and multi-phase flow
 
-##Technologies
+## Technologies
 Matlab software using the bubble-scale vesiculation model of Coumans et al. (2020) [[Link Text]](https://doi.org/10.1016/j.jvolgeores.2020.107002)(https://doi.org/10.1016/j.jvolgeores.2020.107002)
 
 ## Contains
